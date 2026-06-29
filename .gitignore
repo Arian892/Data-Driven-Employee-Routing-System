@@ -12,6 +12,7 @@ backend/app/repositories/__pycache__/
 backend/app/services/__pycache__/
 backend/app/services/__pycache__/
 
+backend/app/__pycache__/main.cpython-312.pyc
 
 # Node modules
 node_modules/
@@ -47,3 +48,4 @@ Thumbs.db
 api_doc.yaml
 
 backend/cache/
+backend/.venv/lib64
