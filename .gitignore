@@ -54,3 +54,10 @@ backend/app/routers/__pycache__/__init__.cpython-312.pyc
 backend/app/routers/__pycache__/auth.cpython-312.pyc
 
 /resources/*
+
+# OSRM source and generated routing graph are provisioned separately on the
+# deployment host. They are too large for source control.
+/osrm-data/*
+!/osrm-data/.gitkeep
+
+README-deploy.md

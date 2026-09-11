@@ -11,6 +11,23 @@
 
 services:
 
+  # Local car-routing service. The preprocessed Bangladesh map files live on
+  # the host in ./osrm-data and are deliberately not baked into application
+  # images, because the complete dataset is large and must be refreshed alone.
+  osrm:
+    # Pin the preprocessing/runtime version so generated graph files remain
+    # compatible and deployments do not depend on the mutable :latest tag.
+    image: ghcr.io/project-osrm/osrm-backend:v26.7.3-debian
+    restart: unless-stopped
+    volumes:
+      - ./osrm-data:/data:ro
+    command: osrm-routed --algorithm mld /data/bangladesh-latest.osrm
+    # Containers reach OSRM at http://osrm:5000 over the Compose network.
+    # It is intentionally not published to the host, avoiding a conflict with
+    # any standalone local OSRM diagnostic server on port 5000.
+    expose:
+      - "5000"
+
   backend:
     image: ghcr.io/saon110/dders-backend:latest
     build:
@@ -22,12 +39,18 @@ services:
       - path: backend/.env
         required: false
     environment:
-      ROUTING_ENGINE: lightweight
+      # The running backend resolves this hostname through Docker Compose's
+      # internal DNS. Do not use localhost here: that would be this container.
+      ROUTING_ENGINE: osrm
+      OSRM_BASE_URL: http://osrm:5000
       JWT_ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: "480"
       ROOT_PATH: /api
     expose:
       - "8000"
+    depends_on:
+      osrm:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/', timeout=5)\""]
       interval: 30s
