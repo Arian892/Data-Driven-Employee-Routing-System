@@ -32,10 +32,17 @@ reproduces the notebook's 148 routes / 680 stops / 788 passengers / 40 unassigne
 from __future__ import annotations
 
 import logging
+import math
+import os
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
+import joblib
+import numpy as np
+import pandas as pd
 
 from app.services.routing.config import (
     FIXED_ROUTE_SHIFTS,
@@ -52,6 +59,173 @@ Coord = Tuple[float, float]
 # Friday is weekday() == 4. Dhaka Metro Rail does not run on Fridays, which is
 # why BDS exempts that day from the Agargaon Metro consolidation.
 _FRIDAY = 4
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ML travel-time model (GPS_TRACE_ML/trained-model/inference_bundle.joblib)
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# Leg *durations* for ordering (2-opt) and timing come from this trained
+# XGBoost model instead of raw OSRM/haversine durations. Distance_km and route
+# geometry are unaffected — they still come straight from the injected
+# `DistanceProvider`, and the model itself needs that provider's own
+# duration/distance as two of its input features (it is a correction layer on
+# top of OSRM, not a replacement for it). Feature engineering here is a direct
+# port of `GPS_TRACE_ML/test_inference_bundle.py`'s `build_feature_row`, kept
+# self-contained since that project lives outside this backend package.
+
+_ML_BUNDLE_ENV_VAR = "ROUTING_ML_MODEL_PATH"
+_ML_BUNDLE_DEFAULT_PATH = Path(__file__).resolve().parent / "ml_model" / "inference_bundle.joblib"
+
+_ml_bundle_cache: Optional[Dict[str, Any]] = None
+
+_ML_FIXED_HOLIDAYS_MD = {(2, 21), (3, 26), (4, 14), (5, 1), (8, 15), (12, 16), (12, 25)}
+
+
+def _load_ml_bundle() -> Dict[str, Any]:
+    """Loads `inference_bundle.joblib` once per process."""
+    global _ml_bundle_cache
+    if _ml_bundle_cache is None:
+        path = os.environ.get(_ML_BUNDLE_ENV_VAR, str(_ML_BUNDLE_DEFAULT_PATH))
+        _ml_bundle_cache = joblib.load(path)
+    return _ml_bundle_cache
+
+
+def _ml_bearing_deg(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dlmb = math.radians(lon2 - lon1)
+    x = math.sin(dlmb) * math.cos(p2)
+    y = math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dlmb)
+    return (math.degrees(math.atan2(x, y)) + 360) % 360
+
+
+def _ml_traffic_bucket(hour: float) -> str:
+    if hour < 6:
+        return "night"
+    elif hour < 8:
+        return "morning_offpeak"
+    elif hour < 10:
+        return "morning_rush"
+    elif hour < 17:
+        return "midday"
+    elif hour < 21:
+        return "evening_rush"
+    return "evening_winddown"
+
+
+def _ml_grid_cell(lat: float, lon: float, bundle: Dict[str, Any]) -> int:
+    gp = bundle["grid_params"]
+    r = min(int((lat - gp["min_lat"]) / gp["lat_step"]), gp["n_rows"] - 1)
+    c = min(int((lon - gp["min_lon"]) / gp["lon_step"]), gp["n_cols"] - 1)
+    return r * gp["n_cols"] + c
+
+
+def _ml_feature_row(
+    src: Coord,
+    dst: Coord,
+    query_time: datetime,
+    osrm_route_distance_km: float,
+    osrm_free_flow_duration_sec: float,
+    bundle: Dict[str, Any],
+) -> Dict[str, Any]:
+    """One (src, dst, query_time) trip -> the exact feature row the model expects."""
+    src_lat, src_lon = src
+    dst_lat, dst_lon = dst
+    haversine_distance_km = haversine_km(src, dst)
+    bearing_degrees = _ml_bearing_deg(src_lat, src_lon, dst_lat, dst_lon)
+    route_directness_ratio = (
+        haversine_distance_km / osrm_route_distance_km if osrm_route_distance_km > 0 else float("nan")
+    )
+
+    src_zone_id = _ml_grid_cell(src_lat, src_lon, bundle)
+    dst_zone_id = _ml_grid_cell(dst_lat, dst_lon, bundle)
+    od_zone_pair_id = f"{src_zone_id}_{dst_zone_id}"
+
+    hour = query_time.hour + query_time.minute / 60.0 + query_time.second / 3600.0
+    day_of_week = query_time.strftime("%A")
+    is_friday = day_of_week == "Friday"
+    is_saturday = day_of_week == "Saturday"
+    is_weekend = is_friday or is_saturday
+    rush_hour_flag = (8 <= hour < 10) or (17 <= hour < 21)
+    bucket = _ml_traffic_bucket(hour)
+    is_holiday = (query_time.month, query_time.day) in _ML_FIXED_HOLIDAYS_MD
+
+    lvl1, lvl2, lvl3 = bundle["lvl1"], bundle["lvl2"], bundle["lvl3"]
+    key1 = (od_zone_pair_id, bucket)
+    if key1 in lvl1.index and lvl1.loc[key1, "count"] >= bundle["min_support"]:
+        historical_avg_speed_kmh = lvl1.loc[key1, "mean"]
+    elif od_zone_pair_id in lvl2.index and lvl2.loc[od_zone_pair_id, "count"] >= bundle["min_support"]:
+        historical_avg_speed_kmh = lvl2.loc[od_zone_pair_id, "mean"]
+    elif bucket in lvl3.index and lvl3.loc[bucket, "count"] >= bundle["min_support"]:
+        historical_avg_speed_kmh = lvl3.loc[bucket, "mean"]
+    else:
+        historical_avg_speed_kmh = bundle["global_mean"]
+
+    return {
+        "src_zone_id": src_zone_id, "dst_zone_id": dst_zone_id, "od_zone_pair_id": od_zone_pair_id,
+        "day_of_week": day_of_week, "traffic_period_bucket": bucket,
+        "haversine_distance_km": haversine_distance_km, "bearing_degrees": bearing_degrees,
+        "osrm_route_distance_km": osrm_route_distance_km,
+        "osrm_free_flow_duration_sec": osrm_free_flow_duration_sec,
+        "route_directness_ratio": route_directness_ratio,
+        "hour_sin": math.sin(2 * math.pi * hour / 24.0), "hour_cos": math.cos(2 * math.pi * hour / 24.0),
+        "is_friday": int(is_friday), "is_saturday": int(is_saturday), "is_weekend": int(is_weekend),
+        "is_holiday": int(is_holiday), "rush_hour_flag": int(rush_hour_flag),
+        "historical_avg_speed_kmh": historical_avg_speed_kmh,
+    }
+
+
+def _ml_predict_minutes_batch(rows: List[Dict[str, Any]], bundle: Dict[str, Any]) -> List[float]:
+    """Batched XGBoost prediction: one `.predict()` call for every leg in a matrix."""
+    if not rows:
+        return []
+    frame = pd.DataFrame(rows)
+    for c in bundle["categorical_cols"]:
+        frame[c] = pd.Categorical(frame[c].astype(str), categories=bundle["cat_categories"][c])
+    for c in ["is_friday", "is_saturday", "is_weekend", "is_holiday", "rush_hour_flag"]:
+        frame[c] = frame[c].astype(int)
+    frame = frame[bundle["feature_cols"]]
+    pred_seconds = np.exp(bundle["xgb_model"].predict(frame))
+    return [float(s) / 60.0 for s in pred_seconds]
+
+
+class _MlDurationProvider:
+    """Decorates a `DistanceProvider`: durations come from the XGBoost model,
+    distance_km and route geometry pass straight through unchanged.
+
+    `query_time` must be set by the solver before each event is processed —
+    the model's prediction is time-of-day/day-of-week dependent, and `table`/
+    `route` carry no such argument in the `DistanceProvider` protocol.
+    """
+
+    name = "xgboost_ml"
+
+    def __init__(self, inner: DistanceProvider):
+        self.inner = inner
+        self.query_time: Optional[datetime] = None
+        self.bundle = _load_ml_bundle()
+
+    def table(self, coords: Sequence[Coord]):
+        raw_durations, distances = self.inner.table(coords)
+        if self.query_time is None:
+            return raw_durations, distances
+        n = len(coords)
+        pairs = [(i, j) for i in range(n) for j in range(n) if i != j]
+        rows = [
+            _ml_feature_row(
+                coords[i], coords[j], self.query_time,
+                distances[i][j], raw_durations[i][j] * 60.0, self.bundle,
+            )
+            for i, j in pairs
+        ]
+        predicted = _ml_predict_minutes_batch(rows, self.bundle)
+        durations = [row[:] for row in raw_durations]
+        for (i, j), minutes in zip(pairs, predicted):
+            durations[i][j] = minutes
+        return durations, distances
+
+    def route(self, coords: Sequence[Coord]):
+        return self.inner.route(coords)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -143,7 +317,7 @@ class NightSolver:
         employee_names: Optional[Dict[str, str]] = None,
     ):
         self.cfg = cfg or SolverConfig()
-        self.provider = provider
+        self.provider = _MlDurationProvider(provider)
         self.office: Coord = self.cfg.office
         self.service_date = service_date
         self.pickup_requests = list(pickup_requests)
@@ -770,6 +944,9 @@ class NightSolver:
 
     def _run_pickup_event(self, event) -> None:
         shift_time = event["shift_time"]
+        # ML model prediction is time-of-day dependent: anchor every leg in
+        # this event to the requests' own pickup/shift-start time (event["time"]).
+        self.provider.query_time = self._parse_time(event["time"])
         # latest instant the trip could start (it ends at the office deadline)
         self._update_fleet(self._parse_time(shift_time) - timedelta(minutes=self.cfg.office_buffer_min))
         vehicles, unassigned = self._assign_pickup_event(event)
@@ -861,6 +1038,9 @@ class NightSolver:
 
     def _run_dropoff_event(self, event) -> None:
         shift_end_time = event["shift_time"]
+        # ML model prediction is time-of-day dependent: anchor every leg in
+        # this event to the requests' own scheduled drop-off time (event["time"]).
+        self.provider.query_time = self._parse_time(event["time"])
         # the car leaves the office at shift_end — that is the trip start
         self._update_fleet(self._parse_time(shift_end_time))
         vehicles, unassigned = self._assign_dropoff_event(event)
