@@ -11,20 +11,33 @@
 
 services:
 
-  # Local car-routing service. The preprocessed Bangladesh map files live on
-  # the host in ./osrm-data and are deliberately not baked into application
-  # images, because the complete dataset is large and must be refreshed alone.
+  # Car-routing service (driving). The preprocessed Bangladesh graph lives on
+  # the host in ./osrm-data/car-night and is deliberately not baked into
+  # application images, because the complete dataset is large and is refreshed
+  # on its own (see osrm-data/README.md).
   osrm:
-    # Pin the preprocessing/runtime version so generated graph files remain
-    # compatible and deployments do not depend on the mutable :latest tag.
-    image: ghcr.io/project-osrm/osrm-backend:v26.7.3-debian
+    # The graph was built with OSRM 26.8.0, so the runtime must match. An older
+    # image refuses to load the graph ("prepared with OSRM 26.8.0 but this is
+    # vX.Y.Z"). Pin a 26.8.0 tag here if you do not want the mutable :latest.
+    image: ghcr.io/project-osrm/osrm-backend:latest
     restart: unless-stopped
     volumes:
-      - ./osrm-data:/data:ro
+      - ./osrm-data/car-night:/data:ro
     command: osrm-routed --algorithm mld /data/bangladesh-latest.osrm
     # Containers reach OSRM at http://osrm:5000 over the Compose network.
     # It is intentionally not published to the host, avoiding a conflict with
     # any standalone local OSRM diagnostic server on port 5000.
+    expose:
+      - "5000"
+
+  # Pedestrian-routing service (foot). The solver's Case A reads real walk times
+  # from this graph; without it the backend falls back to straight-line walking.
+  osrm-foot:
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    restart: unless-stopped
+    volumes:
+      - ./osrm-data/foot:/data:ro
+    command: osrm-routed --algorithm mld /data/bangladesh-latest.osrm
     expose:
       - "5000"
 
@@ -39,10 +52,11 @@ services:
       - path: backend/.env
         required: false
     environment:
-      # The running backend resolves this hostname through Docker Compose's
+      # The running backend resolves these hostnames through Docker Compose's
       # internal DNS. Do not use localhost here: that would be this container.
       ROUTING_ENGINE: osrm
       OSRM_BASE_URL: http://osrm:5000
+      OSRM_FOOT_BASE_URL: http://osrm-foot:5000
       JWT_ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: "480"
       ROOT_PATH: /api
@@ -50,6 +64,8 @@ services:
       - "8000"
     depends_on:
       osrm:
+        condition: service_started
+      osrm-foot:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/', timeout=5)\""]
