@@ -32,11 +32,17 @@ class Settings(BaseSettings):
     # solve always completes.
     routing_engine: str = "osrm"
     osrm_base_url: str = "http://localhost:5000"
+    # Separate engine for the pedestrian network (Case A walk times). The
+    # routing_night algorithm needs real foot-network durations, not a
+    # straight-line estimate, to decide whether a rider walks to a fixed stop.
+    osrm_foot_base_url: str = "http://localhost:5001"
     osrm_timeout_seconds: float = 30.0
     # Health probe before the first real call; short, so a dead OSRM costs little.
     osrm_probe_timeout_seconds: float = 2.0
     # Haversine fallback only: straight-line km -> minutes.
     routing_average_speed_kmph: float = 40.0
+    # Haversine fallback for the foot engine only (when OSRM foot is down).
+    routing_walk_speed_kmph: float = 4.5
 
     @property
     def prefers_osrm(self) -> bool:

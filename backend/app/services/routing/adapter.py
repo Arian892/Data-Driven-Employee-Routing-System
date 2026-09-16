@@ -336,6 +336,7 @@ class RoutingAdapter:
                     "service_date": row.get("service_date"),
                     "request_type": row.get("request_type"),
                     "status": row.get("status"),
+                    "vehicle_plate": row.get("vehicle_plate"),
                 })
             else:
                 out.append({
@@ -347,6 +348,7 @@ class RoutingAdapter:
                     "drop_time": _clock(row.get("drop_time")),
                     "service_date": row.get("service_date"),
                     "status": row.get("status"),
+                    "vehicle_plate": row.get("vehicle_plate"),
                 })
 
         if no_email:

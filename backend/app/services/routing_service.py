@@ -33,7 +33,7 @@ from app.models.route import (
 from app.services.routing import adapter as routing_adapter
 from app.services.routing import writer as routing_writer
 from app.services.routing.config import SolverConfig
-from app.services.routing.distance import HaversineProvider, get_provider
+from app.services.routing.distance import HaversineProvider, get_foot_provider, get_provider
 from app.services.routing.solver import solve_night
 from app.services.week_service import OFFICE_LOCATION
 
@@ -204,6 +204,9 @@ class RoutingService:
         # be a lie about how long the trip takes.
         if average_speed_kmph and isinstance(provider, HaversineProvider):
             provider = HaversineProvider(average_speed_kmph=average_speed_kmph)
+        # The pedestrian network (Case A walk times) is a separate engine; it
+        # degrades to straight-line walking times if no foot server answers.
+        foot = get_foot_provider()
         engine = getattr(provider, "name", "unknown")
 
         try:
@@ -215,6 +218,7 @@ class RoutingService:
                 solved = solve_night(
                     service_date=service_date,
                     provider=provider,
+                    foot=foot,
                     cfg=cfg,
                     **ctx.solver_input,
                 )
@@ -225,6 +229,9 @@ class RoutingService:
             close = getattr(provider, "close", None)
             if callable(close):
                 close()
+            close_foot = getattr(foot, "close", None)
+            if callable(close_foot):
+                close_foot()
 
     def _response(
         self,

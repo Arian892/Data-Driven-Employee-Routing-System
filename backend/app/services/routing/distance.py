@@ -48,14 +48,165 @@ def haversine_km(a: Coord, b: Coord) -> float:
 
 
 def walk_minutes(a: Coord, b: Coord, walk_speed_kmph: float) -> float:
-    """Walking time between two points.
+    """Straight-line walking time between two points (fallback only).
 
-    Always straight-line, even when OSRM is available: this models an employee
-    walking to a pickup point, not a car driving, so the road network is the
-    wrong graph. Kept as a free function rather than a provider method for that
-    reason.
+    `routing_night.py` reads Case A walking times from the OSRM foot network
+    (real pedestrian graph, no assumed speed). This function is the haversine
+    stand-in used when that foot engine is unreachable, so a solve still
+    completes. Kept as a free function so `HaversineWalkProvider` can reuse it.
     """
     return haversine_km(a, b) / walk_speed_kmph * 60.0
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Foot provider: real pedestrian-network walking times (OSRM foot profile).
+# `routing_night.py` Case A asks "can this rider walk to this fixed stop within
+# WALK_LIMIT_MIN" against the foot graph, batching one /table call per employee
+# home vs. the candidate stops. `prefetch` fills the cache in chunks; `walk_minutes`
+# then reads it back pair-by-pair. Cache keys round to ~1 m like the driving side.
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class FootDistanceProvider(Protocol):
+    """Walking times between coordinates on the pedestrian network.
+
+    A solve is still allowed to fall back to straight-line estimates when no
+    foot engine answers, so the solver only ever sees this narrow surface.
+    """
+
+    name: str
+
+    def walk_minutes(self, a: Coord, b: Coord) -> float:
+        """Minutes to walk a -> b. float("inf") when the pair is unroutable."""
+        ...
+
+    def prefetch(self, home: Coord, stops: Iterable[Coord]) -> None:
+        """Warm the walk cache for `home` vs. every stop (batched)."""
+        ...
+
+
+def _walk_key(a: Coord, b: Coord) -> tuple:
+    return (round(a[0], 6), round(a[1], 6), round(b[0], 6), round(b[1], 6))
+
+
+class HaversineWalkProvider:
+    """Straight-line fallback for the foot engine (no server, no assumptions)."""
+
+    name = "haversine_walk"
+
+    def __init__(self, walk_speed_kmph: float | None = None):
+        self.walk_speed_kmph = walk_speed_kmph or app_settings.routing_walk_speed_kmph
+
+    def walk_minutes(self, a: Coord, b: Coord) -> float:
+        return walk_minutes(a, b, self.walk_speed_kmph)
+
+    def prefetch(self, home: Coord, stops: Iterable[Coord]) -> None:
+        return None
+
+
+class FootOsrmProvider:
+    """Pedestrian-network walking times via a local OSRM foot server.
+
+    Mirrors `routing_night.py`'s `_foot_table`/`prefetch_walk`/`walk_minutes`:
+    batched `/table/v1/foot/` calls (OSRM caps a table at ~100 coordinates),
+    chunked against the stop set, with every pair cached for the life of the
+    instance. A null matrix entry (unroutable on foot) becomes inf.
+    """
+
+    name = "osrm_foot"
+
+    # OSRM caps a /table call at 100 coordinates, so prefetch chunks stops as
+    # home + up to 90 per call -- the same budget routing_night.py uses.
+    _PREFETCH_CHUNK = 90
+
+    def __init__(self, base_url: str | None = None, timeout: float | None = None):
+        self.base_url = (base_url or app_settings.osrm_foot_base_url).rstrip("/")
+        self.timeout = timeout or app_settings.osrm_timeout_seconds
+        self._client = httpx.Client(timeout=self.timeout)
+        self._cache: dict[tuple, float] = {}
+
+    @staticmethod
+    def _coord_str(coords: Sequence[Coord]) -> str:
+        return ";".join(f"{lng},{lat}" for lat, lng in coords)
+
+    def _table(self, coords: Sequence[Coord]) -> Matrix:
+        """One OSRM foot /table call -> durations in minutes (inf = unroutable)."""
+        response = self._client.get(
+            f"{self.base_url}/table/v1/foot/{self._coord_str(coords)}",
+            params={"annotations": "duration"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("code") != "Ok":
+            raise RuntimeError(f"OSRM foot error: {payload.get('code')} {payload.get('message', '')}")
+        return [
+            [value / 60.0 if value is not None else float("inf") for value in row]
+            for row in payload["durations"]
+        ]
+
+    def prefetch(self, home: Coord, stop_coords: Iterable[Coord]) -> None:
+        """Warm the walk cache: one batched foot call per chunk of stops.
+
+        Case A walks every employee home against every candidate stop, so asking
+        pair-by-pair would be tens of thousands of HTTP calls. Chunking keeps it
+        one call per ~90 stops; the minutes land in the same cache `walk_minutes`
+        reads back.
+        """
+        stops = list(stop_coords)
+        for i in range(0, len(stops), self._PREFETCH_CHUNK):
+            chunk = stops[i:i + self._PREFETCH_CHUNK]
+            durations = self._table([home] + chunk)
+            for j, c in enumerate(chunk):
+                self._cache[_walk_key(home, c)] = durations[0][j + 1]
+
+    def walk_minutes(self, a: Coord, b: Coord) -> float:
+        key = _walk_key(a, b)
+        got = self._cache.get(key)
+        if got is not None:
+            return got
+        mins = self._table([a, b])[0][1]
+        self._cache[key] = mins
+        return mins
+
+    def healthy(self) -> bool:
+        """Cheap probe against a known-good coordinate pair."""
+        probe = httpx.Client(timeout=app_settings.osrm_probe_timeout_seconds)
+        try:
+            response = probe.get(
+                f"{self.base_url}/table/v1/foot/"
+                f"{self._coord_str([(23.7702, 90.4085), (23.7702, 90.4095)])}",
+                params={"annotations": "duration"},
+            )
+            return response.status_code == 200 and response.json().get("code") == "Ok"
+        except Exception:
+            return False
+        finally:
+            probe.close()
+
+    def close(self) -> None:
+        self._client.close()
+
+
+def get_foot_provider(prefer_osrm: bool | None = None) -> FootDistanceProvider:
+    """Best available foot provider. Never raises -- a solve must always complete."""
+    if prefer_osrm is None:
+        prefer_osrm = app_settings.prefers_osrm
+
+    if not prefer_osrm:
+        return HaversineWalkProvider()
+
+    candidate = FootOsrmProvider()
+    if candidate.healthy():
+        logger.info("routing: using OSRM foot at %s", candidate.base_url)
+        return candidate
+
+    candidate.close()
+    logger.warning(
+        "routing: OSRM foot unreachable at %s, falling back to straight-line "
+        "walking times (Case A walk limits will be approximate)",
+        candidate.base_url,
+    )
+    return HaversineWalkProvider()
 
 
 class DistanceProvider(Protocol):

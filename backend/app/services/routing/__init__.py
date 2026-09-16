@@ -16,7 +16,14 @@ Layering is deliberate and worth keeping:
 """
 from app.services.routing.adapter import RoutingContext
 from app.services.routing.config import SolverConfig
-from app.services.routing.distance import HaversineProvider, OsrmProvider, get_provider
+from app.services.routing.distance import (
+    FootOsrmProvider,
+    HaversineProvider,
+    HaversineWalkProvider,
+    OsrmProvider,
+    get_foot_provider,
+    get_provider,
+)
 from app.services.routing.solver import SolvedNight, solve_night
 
 __all__ = [
@@ -25,6 +32,9 @@ __all__ = [
     "SolverConfig",
     "RoutingContext",
     "get_provider",
+    "get_foot_provider",
     "OsrmProvider",
     "HaversineProvider",
+    "FootOsrmProvider",
+    "HaversineWalkProvider",
 ]

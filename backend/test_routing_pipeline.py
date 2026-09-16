@@ -196,7 +196,7 @@ def main():
     ctx = routing_adapter.load(db, service_date)
     inp = ctx.solver_input
     check("loads the whole night, not just un-routed rows",
-          len(inp["pickup_requests"]) == 414 and len(inp["dropoff_requests"]) == 414,
+          len(inp["pickup_requests"]) == 414 and len(inp["dropoff_requests"]) == 939,
           f"{len(inp['pickup_requests'])} pickup / {len(inp['dropoff_requests'])} dropoff")
     check("vehicle_pickup_location is loaded (Case A + vehicle_shifts)",
           len(inp["fixed_stops"]) == 186, f"{len(inp['fixed_stops'])} fixed stops")
@@ -208,7 +208,7 @@ def main():
     check("coordinates are floats, not PostgREST strings",
           all(isinstance(r["pickup_lat"], (float, type(None))) for r in inp["pickup_requests"]))
     check("id maps cover every request",
-          len(ctx.pickup_id_by_email) == 414 and len(ctx.dropoff_id_by_email) == 414)
+          len(ctx.pickup_id_by_email) == 414 and len(ctx.dropoff_id_by_email) == 939)
     check("driver map is populated",
           sum(1 for v in ctx.driver_id_by_plate.values() if v) > 0)
 

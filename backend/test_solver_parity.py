@@ -30,7 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app.services.routing.config import SolverConfig
-from app.services.routing.distance import HaversineProvider, OsrmProvider
+from app.services.routing.distance import HaversineProvider, OsrmProvider, FootOsrmProvider
 from app.services.routing.solver import solve_night
 
 # `data/` is a sibling of the app repo, not inside it.
@@ -38,22 +38,23 @@ DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 FIXTURE = DATA_DIR / "full_test_data.json"
 REFERENCE = DATA_DIR / "solved_routes.json"
 
-# The notebook's own printed output for this fixture against a local OSRM
-# server. `solved_routes.json` would be the richer oracle, but the shipped copy
-# is truncated mid-write (52 of 148 routes, no stops/passengers/unassigned
-# sections), so these numbers are the reference until it is regenerated.
+# The script's own printed output for this fixture against local OSRM servers
+# (car-night on :5000 AND foot on :5001, as `test-routing/run_osrm.sh` starts
+# them). `data/solved_routes_walk20_retw0.json` is that run's artifact — this
+# is the baseline the port must reproduce. The parity pass runs with
+# `use_ml=False` so durations are raw OSRM exactly like the script; the
+# production path keeps the XGBoost duration layer.
 EXPECTED = {
-    "routes": 148,
-    "pickup_routes": 59,
-    "dropoff_routes": 89,
-    "stops": 680,
-    "passengers": 788,
-    "unassigned": 40,
+    "routes": 246,
+    "pickup_routes": 86,
+    "dropoff_routes": 160,
+    "stops": 1100,
+    "passengers": 1295,
+    "unassigned": 58,
 }
 EXPECTED_REASONS = {
     "no_coordinates": 36,
-    "dropped_for_120min_cap": 2,
-    "vehicle_not_free_in_time": 2,
+    "vehicle_not_free_in_time": 22,
 }
 
 FAILURES = []
@@ -109,7 +110,9 @@ def check_invariants(solved, data, label):
         if r["type"] == "pickup":
             a, b = r["parking_departure"], r["office_arrival"]
         else:
-            a, b = r["office_departure"], r["parking_arrival"]
+            # A drop-off's duty starts with the deadhead to the office, so the
+            # occupied window is trip_start -> tour_end (not office_departure).
+            a, b = r["trip_start"], r["tour_end"]
         windows.setdefault(r["plate_no"], []).append((a, b, r["route_instance_id"]))
     overlaps = []
     for plate, spans in windows.items():
@@ -125,11 +128,12 @@ def check_invariants(solved, data, label):
     check(f"[{label}] capacity respected on every route",
           not over, f"{len(over)} over capacity, e.g. {[r['route_instance_id'] for r in over][:3]}")
 
-    # --- 120-minute cap
+    # --- 120-minute cap (the PASSENGER journey: first pickup / office -> last stop)
     cfg = SolverConfig()
-    too_long = [r for r in solved.routes if r["total_minutes"] > cfg.max_route_minutes + 1e-6]
+    too_long = [r for r in solved.routes
+                if r.get("passenger_total_minutes", r["total_minutes"]) > cfg.max_route_minutes + 1e-6]
     check(f"[{label}] no route exceeds the {cfg.max_route_minutes:.0f}-min cap",
-          not too_long, f"{len(too_long)} over, e.g. {[(r['route_instance_id'], r['total_minutes']) for r in too_long][:3]}")
+          not too_long, f"{len(too_long)} over, e.g. {[(r['route_instance_id'], r.get('passenger_total_minutes')) for r in too_long][:3]}")
 
     # --- Case A: the 22:00/23:00 shifts must use named fixed stops, not homes
     fixed_stop_names = {s["location_name"] for s in data["vehicle_pickup_locations"]}
@@ -170,9 +174,13 @@ def main():
           f"{len(kwargs['fixed_stops'])} fixed stops")
 
     # ── pass 1: OSRM (exact parity) ──────────────────────────────────────────
+    # Needs BOTH engines: the car graph for durations/geometry and the foot
+    # graph for Case A walk times. `use_ml=False` keeps durations raw OSRM so
+    # the counts are comparable to the script's artifact.
     osrm = OsrmProvider()
-    if osrm.healthy():
-        solved = solve_night(provider=osrm, **kwargs)
+    foot = FootOsrmProvider()
+    if osrm.healthy() and foot.healthy():
+        solved = solve_night(provider=osrm, foot=foot, use_ml=False, **kwargs)
         counts = check_invariants(solved, data, "osrm")
         for key, want in EXPECTED.items():
             check(f"[osrm] parity {key} == {want}", counts[key] == want, f"got {counts[key]}")
@@ -182,11 +190,11 @@ def main():
                   reasons.get(reason, 0) == want, f"got {reasons.get(reason, 0)}")
         for w in solved.warnings:
             print(f"  warn  {w}")
-        osrm.close()
     else:
-        print(f"\nSKIP osrm pass: no OSRM server at {osrm.base_url}")
-        print("     Exact parity (148/680/788/40) is UNVERIFIED without it.")
-        osrm.close()
+        print(f"\nSKIP osrm pass: need car OSRM at {osrm.base_url} and foot OSRM at {foot.base_url}")
+        print("     Start both with `test-routing/run_osrm.sh`. Exact parity is UNVERIFIED without them.")
+    osrm.close()
+    foot.close()
 
     # ── pass 2: haversine (invariants only) ──────────────────────────────────
     solved = solve_night(provider=HaversineProvider(), **kwargs)
