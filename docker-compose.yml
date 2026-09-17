@@ -19,7 +19,7 @@ services:
     # The graph was built with OSRM 26.8.0, so the runtime must match. An older
     # image refuses to load the graph ("prepared with OSRM 26.8.0 but this is
     # vX.Y.Z"). Pin a 26.8.0 tag here if you do not want the mutable :latest.
-    image: ghcr.io/project-osrm/osrm-backend:latest
+    image: ghcr.io/project-osrm/osrm-backend:26.8.0-debian
     restart: unless-stopped
     volumes:
       - ./osrm-data/car-night:/data:ro
@@ -33,7 +33,7 @@ services:
   # Pedestrian-routing service (foot). The solver's Case A reads real walk times
   # from this graph; without it the backend falls back to straight-line walking.
   osrm-foot:
-    image: ghcr.io/project-osrm/osrm-backend:latest
+    image: ghcr.io/project-osrm/osrm-backend:26.8.0-debian
     restart: unless-stopped
     volumes:
       - ./osrm-data/foot:/data:ro
