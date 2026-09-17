@@ -39,14 +39,13 @@ to load them, e.g.:
 /data/bangladesh-latest.osrm.cells prepared with OSRM 26.8.0 but this is v26.7.3
 ```
 
-`docker-compose.yml` therefore uses:
+`docker-compose.yml` therefore pins both services to:
 
 ```yaml
-image: ghcr.io/project-osrm/osrm-backend:latest
+image: ghcr.io/project-osrm/osrm-backend:26.8.0-debian
 ```
 
-If you ever pin a fixed tag instead of `:latest`, it **must** be a 26.8.0 tag.
-If you rebuild the graphs (Option B below), use the **same** image for
+If you rebuild the graphs (Option B below), use this **same** image for
 `osrm-extract` / `osrm-partition` / `osrm-customize` as you use to serve.
 
 ---
@@ -106,7 +105,7 @@ each graph with the pinned image and the matching profile.
 
 ```bash
 cd /opt/dders/osrm-data
-IMG=ghcr.io/project-osrm/osrm-backend:latest
+IMG=ghcr.io/project-osrm/osrm-backend:26.8.0-debian
 
 # ── car (driving) ─────────────────────────────────────────────
 cp bangladesh-latest.osm.pbf car-night/
@@ -133,7 +132,7 @@ rm -f foot/bangladesh-latest.osm.pbf
 
 ```yaml
   osrm:
-    image: ghcr.io/project-osrm/osrm-backend:latest
+    image: ghcr.io/project-osrm/osrm-backend:26.8.0-debian
     restart: unless-stopped
     volumes:
       - ./osrm-data/car-night:/data:ro
@@ -142,7 +141,7 @@ rm -f foot/bangladesh-latest.osm.pbf
       - "5000"
 
   osrm-foot:
-    image: ghcr.io/project-osrm/osrm-backend:latest
+    image: ghcr.io/project-osrm/osrm-backend:26.8.0-debian
     restart: unless-stopped
     volumes:
       - ./osrm-data/foot:/data:ro
@@ -165,23 +164,18 @@ and on the `backend` service:
         condition: service_started
 ```
 
-> **CI/CD does not deploy this file or the graph data.** The GitHub Actions
-> deploy only runs `docker compose pull && docker compose up -d` on the VM, so
-> any change to `docker-compose.yml` must be copied to the VM by hand (next step).
+> **CI/CD copies `docker-compose.yml` to the VM on every successful push to
+> `main`, then pulls images and recreates the stack.** The graph data is the
+> exception: it is deliberately excluded from Git and must be copied or built
+> on the VM before the deployment that starts these services.
 
 ---
 
 ## 6. Deploy
 
 ```bash
-# From the machine holding the repo (after the compose change is on main)
-scp docker-compose.yml azureuser@<VM_PUBLIC_IP>:/opt/dders/
-
-# On the VM
-ssh azureuser@<VM_PUBLIC_IP>
-cd /opt/dders
-docker compose pull
-docker compose up -d --remove-orphans
+# Push the compose change to main and wait for the deployment workflow to
+# copy it to the VM, pull images, and recreate the services.
 ```
 
 `ROUTING_ENGINE`/`OSRM_*` are set inline in the compose file, so
@@ -233,7 +227,7 @@ this document are tracked.
 
 | Symptom | Cause / fix |
 |---|---|
-| `File is incompatible with this version of OSRM` | Runtime image ≠ graph build version. Use the 26.8.0 image (`:latest`). |
+| `File is incompatible with this version of OSRM` | Runtime image ≠ graph build version. Use `ghcr.io/project-osrm/osrm-backend:26.8.0-debian` for both building and serving. |
 | `osrm` container restarts / exits | Graph missing or wrong mount. `docker compose logs osrm`; confirm `osrm-data/car-night/bangladesh-latest.osrm` exists. |
 | Backend logs `falling back to haversine` | OSRM unreachable from `backend`: wrong service name/port or the container is down. |
 | Roundabout/turn directions mirrored, odd routes | Car graph built with the stock profile. Rebuild with `car_night.lua`. |
