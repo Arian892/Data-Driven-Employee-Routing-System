@@ -18,9 +18,9 @@
   }
 }
 
-/* Dropdown lists: without this, <option> text inherits the light theme and
-   becomes invisible on the native light dropdown background. */
+/* Dropdown lists: explicit colors so <option> text stays legible against the
+   browser's native dropdown background regardless of OS dark/light mode. */
 select option {
-  background-color: #131929;
-  color: #e8edf5;
+  background-color: #ffffff;
+  color: #0f172a;
 }

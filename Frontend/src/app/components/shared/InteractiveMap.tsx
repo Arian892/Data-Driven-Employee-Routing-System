@@ -17,6 +17,10 @@ interface MapPickerProps {
     position: [number, number];
     label: string;
     color?: string;
+    /** Text shown inside the pin, e.g. '1', '2', ... Defaults to the marker's 1-based index. */
+    code?: string | number;
+    /** 'office' renders a distinct rounded badge; 'mine' renders a larger, highlighted pin. */
+    variant?: 'stop' | 'office' | 'mine';
   }>;
   showRoute?: boolean;
   /**
@@ -27,6 +31,15 @@ interface MapPickerProps {
    * which is honest about being an approximation.
    */
   routeGeometry?: [number, number][] | null;
+  /**
+   * Fit the view to include every marker, instead of the fixed `center`/`zoom`.
+   * Use for route displays where a marker (e.g. the office) can be far enough
+   * from `center` to fall outside a fixed zoom level — without this, that pin
+   * exists on the map but is scrolled off-screen. Leave off for pickers where
+   * the person controls pan/zoom themselves (re-fitting on every pin change
+   * would fight their own zooming).
+   */
+  fitToMarkers?: boolean;
   height?: string;
   /**
    * Mount the map only once it scrolls into view. Use on pages that render
@@ -36,47 +49,48 @@ interface MapPickerProps {
   lazy?: boolean;
 }
 
-const createColoredIcon = (color: string, number?: number) => {
+// A briefcase glyph, not an emoji — emoji rendering (esp. building emoji)
+// varies noticeably across OS/browser, so the office marker uses a crisp,
+// consistent inline SVG instead.
+const BRIEFCASE_SVG = `
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1E1B4B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="7" width="20" height="14" rx="2"></rect>
+    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+  </svg>
+`;
+
+const createColoredIcon = (color: string, code: string | number = '', variant: 'stop' | 'office' | 'mine' = 'stop') => {
+  const isOffice = variant === 'office';
+  const isMine = variant === 'mine';
+  const size = isOffice ? 34 : isMine ? 36 : 30;
+  const ringColor = isMine ? '#FACC15' : 'rgba(255,255,255,0.95)';
+  const ringWidth = isMine ? 3 : 2;
+  const glow = isMine
+    ? '0 0 0 4px rgba(250,204,21,0.3), 0 2px 8px rgba(0,0,0,0.45)'
+    : '0 2px 6px rgba(0,0,0,0.4)';
+  const background = isOffice ? '#FFFFFF' : color;
+  const content = isOffice ? BRIEFCASE_SVG : `<span style="color: white; font-weight: 700; font-size: 13px; font-family: Rajdhani, sans-serif; line-height: 1;">${code}</span>`;
+
   return L.divIcon({
     className: 'custom-marker',
     html: `
-      <div style="position: relative; width: 30px; height: 30px;">
-        <div style="
-          position: absolute;
-          inset: 0;
-          background-color: ${color};
-          border-radius: 50% 50% 50% 0;
-          transform: rotate(-45deg);
-          animation: map-pulse 1.8s ease-out infinite;
-          pointer-events: none;
-        "></div>
-        <div style="
-          position: absolute;
-          inset: 0;
-          background-color: ${color};
-          border-radius: 50% 50% 50% 0;
-          transform: rotate(-45deg);
-          border: 3px solid rgba(255,255,255,0.9);
-          box-shadow: 0 3px 12px rgba(0,0,0,0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          pointer-events: none;
-        ">
-          <span style="
-            transform: rotate(45deg);
-            color: white;
-            font-weight: 700;
-            font-size: 13px;
-            font-family: Rajdhani, sans-serif;
-            line-height: 1;
-          ">${number ?? ''}</span>
-        </div>
+      <div style="
+        width: ${size}px;
+        height: ${size}px;
+        border-radius: 50%;
+        background-color: ${background};
+        border: ${ringWidth}px solid ${ringColor};
+        box-shadow: ${glow};
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        ${content}
       </div>
     `,
-    iconSize: [30, 30],
-    iconAnchor: [15, 30],
-    popupAnchor: [0, -32],
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -(size / 2 + 4)],
   });
 };
 
@@ -87,6 +101,7 @@ export const InteractiveMap: React.FC<MapPickerProps> = ({
   markers = [],
   showRoute = false,
   routeGeometry = null,
+  fitToMarkers = false,
   height = '420px',
   lazy = false,
 }) => {
@@ -145,7 +160,7 @@ export const InteractiveMap: React.FC<MapPickerProps> = ({
         const m = L.marker([lat, lng], {
           icon: createColoredIcon('#F59E0B'),
         }).addTo(map);
-        m.bindPopup(`<div style="background:#131929;color:#e8edf5;padding:8px 12px;border-radius:8px;font-size:12px;border:1px solid rgba(255,255,255,0.1)">
+        m.bindPopup(`<div style="background:#ffffff;color:#0f172a;padding:8px 12px;border-radius:8px;font-size:12px;border:1px solid rgba(15,23,42,0.1)">
           <strong style="display:block;margin-bottom:2px">Selected Location</strong>
           <span style="color:#64748b;font-family:monospace">${lat.toFixed(5)}, ${lng.toFixed(5)}</span>
         </div>`).openPopup();
@@ -173,18 +188,35 @@ export const InteractiveMap: React.FC<MapPickerProps> = ({
     markersRef.current = [];
 
     markers.forEach((md, idx) => {
+      const variant = md.variant ?? 'stop';
+      const defaultColor = variant === 'office' ? '#10B981' : variant === 'mine' ? '#F59E0B' : '#475569';
       const marker = L.marker(md.position, {
-        icon: createColoredIcon(md.color || '#0EA5E9', idx + 1),
+        icon: createColoredIcon(md.color || defaultColor, md.code ?? idx + 1, variant),
       }).addTo(mapInstanceRef.current!);
 
-      marker.bindPopup(`<div style="background:#131929;color:#e8edf5;padding:8px 12px;border-radius:8px;font-size:12px;border:1px solid rgba(255,255,255,0.1)">
+      marker.bindPopup(`<div style="background:#ffffff;color:#0f172a;padding:8px 12px;border-radius:8px;font-size:12px;border:1px solid rgba(15,23,42,0.1)">
         <strong style="display:block;margin-bottom:2px">${md.label}</strong>
         <span style="color:#64748b;font-family:monospace">${md.position[0].toFixed(5)}, ${md.position[1].toFixed(5)}</span>
       </div>`);
 
       markersRef.current.push(marker);
     });
-  }, [markers]);
+
+    // A fixed center/zoom is framed around one point (e.g. the employee's own
+    // stop) — a marker far from it, like the office, can exist on the map but
+    // sit outside the visible viewport. Fitting to all markers guarantees
+    // everything placed on the map is actually seen.
+    if (fitToMarkers && markers.length > 1) {
+      const bounds = L.latLngBounds(markers.map(m => m.position as L.LatLngExpression));
+      mapInstanceRef.current.fitBounds(bounds, { padding: [32, 32], maxZoom: 15 });
+    }
+    // `visible` matters for lazy maps: the map instance (mapInstanceRef.current)
+    // is only created once the card scrolls into view, which happens strictly
+    // after the first render — without `visible` here, that transition doesn't
+    // re-run this effect, so markers silently never get drawn (only the
+    // geometry effect below re-runs on `visible`, which is why the route line
+    // alone would show up with no markers on it).
+  }, [markers, visible, fitToMarkers]);
 
   useEffect(() => {
     if (!mapInstanceRef.current) return;
@@ -199,7 +231,7 @@ export const InteractiveMap: React.FC<MapPickerProps> = ({
 
     if (road.length > 1) {
       polylineRef.current = L.polyline(road as L.LatLngExpression[], {
-        color: '#0EA5E9',
+        color: '#475569',
         weight: 4,
         opacity: 0.9,
       }).addTo(mapInstanceRef.current);
@@ -207,7 +239,7 @@ export const InteractiveMap: React.FC<MapPickerProps> = ({
       // No geometry — dash it, so nobody mistakes a straight hop between stops
       // for a real driving path.
       polylineRef.current = L.polyline(markers.map(m => m.position as L.LatLngExpression), {
-        color: '#0EA5E9',
+        color: '#475569',
         weight: 3,
         opacity: 0.8,
         dashArray: '8, 8',
@@ -223,7 +255,7 @@ export const InteractiveMap: React.FC<MapPickerProps> = ({
         width: '100%',
         borderRadius: '10px',
         overflow: 'hidden',
-        border: '1px solid rgba(255,255,255,0.08)',
+        border: '1px solid rgba(15,23,42,0.1)',
         zIndex: 0,
         position: 'relative',
       }}
@@ -238,7 +270,7 @@ export const InteractiveMap: React.FC<MapPickerProps> = ({
             alignItems: 'center',
             justifyContent: 'center',
             gap: 6,
-            background: 'rgba(255,255,255,0.02)',
+            background: '#F1F5F9',
           }}
         >
           <span style={{ fontSize: 20, opacity: 0.4 }}>🗺️</span>
