@@ -72,6 +72,13 @@ class StopInfo(BaseModel):
     is_shared: Optional[bool] = None
 
 
+class RouteStopInfo(StopInfo):
+    """One stop on the full route, for drawing every stop on the employee's
+    map (as opposed to `StopInfo`, which is only this employee's own stop)."""
+
+    is_mine: bool = False
+
+
 class DriverInfo(BaseModel):
     driver_id: int
     name: Optional[str] = None
@@ -91,6 +98,11 @@ class ScheduleLeg(BaseModel):
     shift_time: Optional[str] = None
     route_geometry: Optional[List[List[float]]] = None
     stop: StopInfo
+    # Every stop on this route, in visiting order — every colleague sharing the
+    # vehicle, not just this employee's own stop. Powers the sequential 1..N
+    # map markers; the office isn't included (the solver never stores it as a
+    # stop row — see routing/solver.py's "ends at the LAST STOP" note).
+    stops: List[RouteStopInfo] = []
     driver: Optional[DriverInfo] = None
     vehicle: Optional[VehicleInfo] = None
 

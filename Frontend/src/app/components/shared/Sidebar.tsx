@@ -2,7 +2,7 @@ import React, { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import {
   MapPinned, ClipboardList, User, LogOut, Map,
-  Car, Menu, X, Zap, Bus,
+  Menu, X, Zap, Bus,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -16,20 +16,23 @@ interface NavItem {
   label: string;
   path: string;
   badge?: string;
-  color?: string;
 }
 
 const employeeNavItems: NavItem[] = [
-  { icon: MapPinned, label: 'Pickup & Dropoff Request', path: '/employee/request', color: 'text-sky-400' },
-  { icon: Zap, label: 'Ad-hoc Request', path: '/employee/adhoc', color: 'text-amber-400' },
-  { icon: ClipboardList, label: 'My Requests', path: '/employee/requests', color: 'text-purple-400' },
-  { icon: User, label: 'My Profile', path: '/employee/profile', color: 'text-slate-400' },
+  { icon: MapPinned, label: 'Pickup & Dropoff Request', path: '/employee/request' },
+  { icon: Zap, label: 'Ad-hoc Request', path: '/employee/adhoc' },
+  { icon: ClipboardList, label: 'My Requests', path: '/employee/requests' },
+  { icon: User, label: 'My Profile', path: '/employee/profile' },
 ];
 
 const driverNavItems: NavItem[] = [
-  { icon: Map, label: "Today's Trips", path: '/driver/trips', color: 'text-sky-400' },
-  { icon: User, label: 'My Profile', path: '/driver/profile', color: 'text-slate-400' },
+  { icon: Map, label: "Today's Trips", path: '/driver/trips' },
+  { icon: User, label: 'My Profile', path: '/driver/profile' },
 ];
+
+// One muted, desaturated slate-blue — flat, no gradient. The editorial
+// reference this follows uses solid color blocks, not shiny SaaS gradients.
+const SIDEBAR_COLOR = '#3F4B5E';
 
 export const Sidebar: React.FC<SidebarProps> = ({ role, children }) => {
   const location = useLocation();
@@ -47,35 +50,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, children }) => {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-5 py-6 border-b border-white/6">
+      <div className="px-5 py-6">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-sky-500/15 border border-sky-500/25 flex items-center justify-center">
-            <Bus className="w-5 h-5 text-sky-400" />
+          <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center">
+            <Bus className="w-5 h-5 text-white" />
           </div>
           <div>
-            <p className="font-bold text-white text-base tracking-wide" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+            <p className="font-bold text-white text-base tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
               TranspoRT
             </p>
-            <p className="text-xs text-slate-600 capitalize">{role} Portal</p>
+            <p className="text-xs text-slate-300 capitalize">{role} Portal</p>
           </div>
         </div>
       </div>
 
-      {/* User card */}
-      <div className="px-4 py-4 border-b border-white/6">
-        <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/4 border border-white/6">
-          <div className="w-9 h-9 rounded-full bg-sky-500/20 border border-sky-500/25 flex items-center justify-center text-sm font-bold text-sky-400 flex-shrink-0">
-            {user?.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{user?.name}</p>
-            <p className="text-xs text-slate-600 truncate">{user?.email}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      {/* Nav — solid white pill for the active page against the flat
+          colored rail, so the current page is unmistakable at a glance. */}
+      <nav className="flex-1 px-3 pt-2 space-y-1 overflow-y-auto">
         {navItems.map(item => {
           const Icon = item.icon;
           const active = location.pathname === item.path;
@@ -86,21 +77,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, children }) => {
               onClick={() => setMobileOpen(false)}
             >
               <div
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 ${
+                className={`flex items-center gap-3 px-3.5 py-3 rounded-lg transition-all duration-150 ${
                   active
-                    ? 'bg-sky-500/15 border border-sky-500/20 text-white'
-                    : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 border border-transparent'
+                    ? 'bg-white text-slate-800'
+                    : 'text-slate-300 hover:text-white hover:bg-white/[0.08]'
                 }`}
               >
-                <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-sky-400' : (item.color || 'text-slate-500')}`} />
-                <span className={`text-sm font-medium flex-1 ${active ? 'text-white' : ''}`}>{item.label}</span>
+                <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-slate-600' : 'text-slate-400'}`} />
+                <span className={`text-sm font-medium flex-1 ${active ? 'text-slate-800' : ''}`}>{item.label}</span>
                 {item.badge && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${active ? 'bg-sky-500/30 text-sky-300' : 'bg-amber-500/20 text-amber-400'}`}>
+                  <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${active ? 'bg-amber-100 text-amber-700' : 'bg-amber-400/20 text-amber-200'}`}>
                     {item.badge}
                   </span>
-                )}
-                {active && (
-                  <div className="w-1.5 h-1.5 rounded-full bg-sky-400" />
                 )}
               </div>
             </Link>
@@ -108,11 +96,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, children }) => {
         })}
       </nav>
 
-      {/* Logout */}
-      <div className="px-3 py-4 border-t border-white/6">
+      {/* User card + sign out */}
+      <div className="p-3 border-t border-white/10 mt-2">
+        <div className="flex items-center gap-3 px-2.5 py-2.5 rounded-xl">
+          <div className="w-9 h-9 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
+            {user?.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-white truncate">{user?.name}</p>
+            <p className="text-xs text-slate-300 truncate">{user?.email}</p>
+          </div>
+        </div>
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-red-500/70 hover:text-red-400 hover:bg-red-500/8 transition"
+          className="w-full flex items-center gap-3 px-3 py-2.5 mt-1 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-white/[0.08] transition"
         >
           <LogOut className="w-4 h-4" />
           <span className="font-medium">Sign Out</span>
@@ -123,28 +120,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, children }) => {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Desktop Sidebar */}
-      <aside
-        className="hidden md:flex md:flex-col w-60 flex-shrink-0 border-r border-white/6"
-        style={{ background: '#0D1320' }}
-      >
+      {/* Desktop Sidebar — flat, no gradient/glow, matching the reference's
+          solid color-block language. */}
+      <aside className="hidden md:flex md:flex-col w-64 flex-shrink-0" style={{ background: SIDEBAR_COLOR }}>
         <SidebarContent />
       </aside>
 
       {/* Mobile topbar */}
-      <div
-        className="md:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 py-3 border-b border-white/6"
-        style={{ background: '#0D1320' }}
-      >
+      <div className="md:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 py-3 shadow-sm" style={{ background: SIDEBAR_COLOR }}>
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-sky-500/15 border border-sky-500/25 flex items-center justify-center">
-            <Bus className="w-4 h-4 text-sky-400" />
+          <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center">
+            <Bus className="w-4 h-4 text-white" />
           </div>
-          <span className="font-bold text-white tracking-wide" style={{ fontFamily: 'Rajdhani, sans-serif' }}>TranspoRT</span>
+          <span className="font-bold text-white tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>TranspoRT</span>
         </div>
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="text-slate-400 hover:text-white transition"
+          className="text-slate-300 hover:text-white transition"
         >
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -154,13 +146,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, children }) => {
       {mobileOpen && (
         <>
           <div
-            className="md:hidden fixed inset-0 bg-black/60 z-40"
+            className="md:hidden fixed inset-0 bg-stone-900/40 z-40"
             onClick={() => setMobileOpen(false)}
           />
-          <aside
-            className="md:hidden fixed top-0 left-0 bottom-0 w-60 z-50 border-r border-white/6"
-            style={{ background: '#0D1320' }}
-          >
+          <aside className="md:hidden fixed top-0 left-0 bottom-0 w-64 z-50 shadow-2xl" style={{ background: SIDEBAR_COLOR }}>
             <SidebarContent />
           </aside>
         </>

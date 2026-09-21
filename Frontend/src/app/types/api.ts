@@ -323,6 +323,11 @@ export interface ScheduleStop {
   is_shared?: boolean | null;
 }
 
+export interface RouteStopInfo extends ScheduleStop {
+  stop_id: number;
+  is_mine: boolean;
+}
+
 /** One half of the night: the ride in, or the ride home. */
 export interface ScheduleLeg {
   route_id: number;
@@ -330,6 +335,9 @@ export interface ScheduleLeg {
   shift_time?: string;
   route_geometry?: RouteGeometry | null;
   stop: ScheduleStop;
+  /** Every stop on this route, in visiting order — every colleague sharing
+   * the vehicle, not just this employee's own `stop` above. */
+  stops?: RouteStopInfo[];
   driver?: { name?: string; phone?: string } | null;
   vehicle?: { plate_no?: string; capacity?: number } | null;
 }

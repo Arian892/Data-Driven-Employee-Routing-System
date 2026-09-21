@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Sidebar } from '../shared/Sidebar';
 import {
-  Users, Clock, MapPin, CheckCircle, Navigation,
+  Users, Clock, MapPin, CheckCircle, Navigation, Map,
   ChevronDown, ChevronUp, Car, Coffee, Play, Flag, CalendarDays,
   Loader2, AlertCircle, Route as RouteIcon,
 } from 'lucide-react';
 import { Switch } from '../ui/switch';
 import { InteractiveMap } from '../shared/InteractiveMap';
 import { AddressText } from '../shared/AddressText';
+import { buildDriverStopMarkers, isSyntheticStopName, MapLegend } from '../shared/ScheduleLeg';
 import { OFFICE_LOCATION } from '../../data/mockData';
 import { driverApi } from '../../services/transportApi';
 import type { DriverAssignmentRoute } from '../../types/api';
@@ -27,9 +28,9 @@ const prettyDate = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
 const statusInfo = (status?: string | null) => {
-  if (status === 'Completed') return { label: 'Completed', cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' };
-  if (status === 'InProgress') return { label: 'In Progress', cls: 'bg-sky-500/15 text-sky-400 border-sky-500/20' };
-  return { label: 'Not Started', cls: 'bg-slate-500/15 text-slate-400 border-slate-500/20' };
+  if (status === 'Completed') return { label: 'Completed', dot: 'bg-emerald-400', text: 'text-emerald-300' };
+  if (status === 'InProgress') return { label: 'In Progress', dot: 'bg-amber-400', text: 'text-amber-300' };
+  return { label: 'Not Started', dot: 'bg-slate-400', text: 'text-slate-300' };
 };
 
 export const DriverTodaysTrips: React.FC = () => {
@@ -122,43 +123,50 @@ export const DriverTodaysTrips: React.FC = () => {
   return (
     <Sidebar role="driver">
       <div className="p-6 max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-1" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
-            Today's Trips
-          </h1>
-          <p className="text-slate-500 text-sm">{prettyDate(selectedDate)}</p>
+        <div className="flex items-center gap-4 pb-6 mb-6 border-b border-stone-200">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/70 border border-slate-100 flex items-center justify-center flex-shrink-0 shadow-sm">
+            <Map className="w-6 h-6 text-slate-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+              Today's Trips
+            </h1>
+            <p className="text-stone-500 text-sm mt-0.5">{prettyDate(selectedDate)}</p>
+          </div>
+        </div>
 
+        <div className="mb-8">
           {/* Date selector */}
           <div className="flex items-center gap-3 mt-4 flex-wrap">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setSelectedDate(prev => shiftDate(prev, -1))}
-                className="w-9 h-9 rounded-lg border border-white/8 bg-white/4 hover:bg-white/8 text-slate-300 transition flex items-center justify-center"
+                className="w-9 h-9 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 transition flex items-center justify-center"
                 aria-label="Previous day"
               >
                 ‹
               </button>
               <button
                 onClick={() => setSelectedDate(prev => shiftDate(prev, 1))}
-                className="w-9 h-9 rounded-lg border border-white/8 bg-white/4 hover:bg-white/8 text-slate-300 transition flex items-center justify-center"
+                className="w-9 h-9 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 transition flex items-center justify-center"
                 aria-label="Next day"
               >
                 ›
               </button>
             </div>
-            <div className="flex items-center gap-2 rounded-lg border border-white/8 bg-white/4 px-3 py-2">
-              <CalendarDays className="w-4 h-4 text-slate-500" />
+            <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
+              <CalendarDays className="w-4 h-4 text-stone-500" />
               <input
                 type="date"
                 value={selectedDate}
                 onChange={e => e.target.value && setSelectedDate(e.target.value)}
-                className="bg-transparent text-sm text-slate-300 focus:outline-none"
+                className="bg-transparent text-sm text-stone-700 focus:outline-none"
               />
             </div>
             {selectedDate !== todayISO() && (
               <button
                 onClick={() => setSelectedDate(todayISO())}
-                className="text-xs text-sky-400 hover:text-sky-300 font-medium"
+                className="text-xs text-sky-600 hover:text-sky-700 font-medium"
               >
                 Back to today
               </button>
@@ -168,62 +176,58 @@ export const DriverTodaysTrips: React.FC = () => {
 
         {error && (
           <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/8 px-5 py-4 mb-6">
-            <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-red-300/90">{error}</p>
+            <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-red-700/90">{error}</p>
           </div>
         )}
 
         {allDone && (
           <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/8 px-5 py-4 mb-6">
-            <CheckCircle className="w-5 h-5 text-emerald-400" />
+            <CheckCircle className="w-5 h-5 text-emerald-600" />
             <div>
-              <p className="text-sm font-semibold text-emerald-300">All trips completed!</p>
-              <p className="text-xs text-slate-500 mt-0.5">Return to your parking location. Have a safe drive!</p>
+              <p className="text-sm font-semibold text-emerald-700">All trips completed!</p>
+              <p className="text-xs text-stone-500 mt-0.5">Return to your parking location. Have a safe drive!</p>
             </div>
           </div>
         )}
 
         {!allDone && !inProgressCount && anyNotStarted && routes.length > 0 && (
           <div className="flex items-center gap-3 rounded-xl border border-amber-500/15 bg-amber-500/6 px-5 py-4 mb-6">
-            <Coffee className="w-5 h-5 text-amber-400" />
+            <Coffee className="w-5 h-5 text-amber-600" />
             <div>
-              <p className="text-sm font-semibold text-amber-300">Standby at Office</p>
-              <p className="text-xs text-slate-500 mt-0.5">Wait at the office departure bay until the next trip starts.</p>
+              <p className="text-sm font-semibold text-amber-700">Standby at Office</p>
+              <p className="text-xs text-stone-500 mt-0.5">Wait at the office departure bay until the next trip starts.</p>
             </div>
           </div>
         )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="rounded-xl border border-white/8 bg-card px-5 py-4">
-            <p className="text-sm text-slate-500 mb-1">Total Trips</p>
-            <p className="text-2xl font-bold text-white" style={{ fontFamily: 'Rajdhani, sans-serif' }}>{routes.length}</p>
-          </div>
-          <div className="rounded-xl border border-white/8 bg-card px-5 py-4">
-            <p className="text-sm text-slate-500 mb-1">Completed</p>
-            <p className="text-2xl font-bold text-emerald-400" style={{ fontFamily: 'Rajdhani, sans-serif' }}>{completedCount}</p>
-          </div>
-          <div className="rounded-xl border border-white/8 bg-card px-5 py-4">
-            <p className="text-sm text-slate-500 mb-1">In Progress</p>
-            <p className="text-2xl font-bold text-sky-400" style={{ fontFamily: 'Rajdhani, sans-serif' }}>{inProgressCount}</p>
-          </div>
-          <div className="rounded-xl border border-white/8 bg-card px-5 py-4">
-            <p className="text-sm text-slate-500 mb-1">Passengers</p>
-            <p className="text-2xl font-bold text-amber-400" style={{ fontFamily: 'Rajdhani, sans-serif' }}>{boardedPassengers}/{totalPassengers}</p>
-          </div>
+          {[
+            { label: 'Total Trips', value: routes.length, icon: RouteIcon, color: 'text-stone-400' },
+            { label: 'Completed', value: completedCount, icon: CheckCircle, color: 'text-emerald-500' },
+            { label: 'In Progress', value: inProgressCount, icon: Navigation, color: 'text-slate-500' },
+            { label: 'Passengers', value: `${boardedPassengers}/${totalPassengers}`, icon: Users, color: 'text-amber-500' },
+          ].map(stat => (
+            <div key={stat.label} className="relative rounded-2xl bg-card px-5 py-4 overflow-hidden shadow-sm">
+              <stat.icon className="absolute -right-3 -top-3 w-20 h-20 opacity-[0.12] text-white" strokeWidth={1.5} />
+              <p className="relative text-xs font-semibold text-slate-300 uppercase tracking-wide mb-1.5">{stat.label}</p>
+              <p className="relative text-3xl font-bold text-white" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{stat.value}</p>
+            </div>
+          ))}
         </div>
 
         {/* Trips */}
         {loading ? (
-          <div className="text-center py-20 text-slate-600">
+          <div className="text-center py-20 text-stone-500">
             <Loader2 className="w-10 h-10 mx-auto mb-3 animate-spin opacity-30" />
             <p>Loading your routes...</p>
           </div>
         ) : routes.length === 0 ? (
-          <div className="text-center py-20 text-slate-600 rounded-xl border border-dashed border-white/8">
+          <div className="text-center py-20 text-stone-500 rounded-xl border border-dashed border-stone-200">
             <RouteIcon className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm text-slate-500">No route assigned for this day.</p>
-            <p className="text-xs text-slate-700 mt-1">Routes appear here once routing completes for the service week.</p>
+            <p className="text-sm text-stone-500">No route assigned for this day.</p>
+            <p className="text-xs text-stone-400 mt-1">Routes appear here once routing completes for the service week.</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -238,15 +242,15 @@ export const DriverTodaysTrips: React.FC = () => {
               const isPickup = route.route_type === 'pickup';
 
               return (
-                <div key={routeId} className="rounded-xl border border-white/8 bg-card overflow-hidden">
+                <div key={routeId} className="rounded-xl bg-card overflow-hidden shadow-sm">
                   {/* Header */}
                   <div
-                    className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-white/3 transition"
+                    className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-white/5 transition"
                     onClick={() => toggleExpand(routeId)}
                   >
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/15 flex items-center justify-center">
-                        <Navigation className="w-5 h-5 text-sky-400" />
+                      <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center">
+                        <Navigation className="w-5 h-5 text-white" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
@@ -254,11 +258,12 @@ export const DriverTodaysTrips: React.FC = () => {
                             {isPickup ? 'Pickup Route' : 'Dropoff Route'}
                             {route.zone_name ? ` · ${route.zone_name}` : ''}
                           </p>
-                          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${info.cls}`}>
+                          <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-full bg-white/10 border border-white/15 font-medium ${info.text}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${info.dot}`} />
                             {info.label}
                           </span>
                         </div>
-                        <div className="flex items-center gap-4 text-xs text-slate-600">
+                        <div className="flex items-center gap-4 text-xs text-slate-300">
                           <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{route.shift_time}</span>
                           <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{route.stops.length} stops</span>
                           <span className="flex items-center gap-1"><Users className="w-3 h-3" />{boardedPax}/{totalPax} boarded</span>
@@ -273,7 +278,7 @@ export const DriverTodaysTrips: React.FC = () => {
                       {info.label === 'Not Started' && route.assignment?.assignment_id != null && (
                         <button
                           onClick={e => { e.stopPropagation(); void changeStatus(route, 'InProgress'); }}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-xs font-semibold transition"
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white text-xs font-semibold transition"
                         >
                           <Play className="w-3 h-3" />
                           Start
@@ -288,71 +293,71 @@ export const DriverTodaysTrips: React.FC = () => {
                           Complete
                         </button>
                       )}
-                      {isOpen ? <ChevronUp className="w-4 h-4 text-slate-600" /> : <ChevronDown className="w-4 h-4 text-slate-600" />}
+                      {isOpen ? <ChevronUp className="w-4 h-4 text-slate-300" /> : <ChevronDown className="w-4 h-4 text-slate-300" />}
                     </div>
                   </div>
 
                   {/* Expanded */}
                   {isOpen && (
-                    <div className="border-t border-white/6 p-5">
+                    <div className="border-t border-white/10 p-5">
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* Map */}
                         <div>
-                          <p className="text-xs text-slate-600 mb-3 uppercase tracking-wider">Route Map</p>
+                          <p className="text-xs text-slate-300 mb-3 uppercase tracking-wider">Route Map</p>
                           <InteractiveMap
                             center={firstStop ? [firstStop.latitude ?? OFFICE_LOCATION.latitude, firstStop.longitude ?? OFFICE_LOCATION.longitude] : [OFFICE_LOCATION.latitude, OFFICE_LOCATION.longitude]}
-                            markers={[
-                              ...orderedStops.map(s => ({
-                                position: [s.latitude ?? OFFICE_LOCATION.latitude, s.longitude ?? OFFICE_LOCATION.longitude] as [number, number],
-                                label: `Stop ${s.sequence_order}`,
-                                color: isPickup ? '#0EA5E9' : '#10B981',
-                              })),
-                            ]}
+                            markers={buildDriverStopMarkers(orderedStops, route.route_type)}
+                            fitToMarkers
                             showRoute
                             routeGeometry={route.route_geometry}
                             height="380px"
                             lazy
                           />
+                          <MapLegend showMine={false} />
                           <div className="grid grid-cols-3 gap-2 mt-3">
-                            <div className="rounded-lg border border-white/6 bg-white/3 p-3 text-center">
-                              <p className="text-xs text-slate-600">Distance</p>
-                              <p className="text-base font-bold text-white mt-0.5" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+                            <div className="rounded-lg bg-white/5 border border-white/10 p-3 text-center">
+                              <p className="text-xs text-slate-300">Distance</p>
+                              <p className="text-base font-bold text-white mt-0.5" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                                 {route.total_distance_km != null ? `${route.total_distance_km} km` : '—'}
                               </p>
                             </div>
-                            <div className="rounded-lg border border-white/6 bg-white/3 p-3 text-center">
-                              <p className="text-xs text-slate-600">Duration</p>
-                              <p className="text-base font-bold text-white mt-0.5" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+                            <div className="rounded-lg bg-white/5 border border-white/10 p-3 text-center">
+                              <p className="text-xs text-slate-300">Duration</p>
+                              <p className="text-base font-bold text-white mt-0.5" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                                 {route.total_travel_time_min != null ? `${route.total_travel_time_min} min` : '—'}
                               </p>
                             </div>
-                            <div className="rounded-lg border border-white/6 bg-white/3 p-3 text-center">
-                              <p className="text-xs text-slate-600">Stops</p>
-                              <p className="text-base font-bold text-white mt-0.5" style={{ fontFamily: 'Rajdhani, sans-serif' }}>{route.stops.length}</p>
+                            <div className="rounded-lg bg-white/5 border border-white/10 p-3 text-center">
+                              <p className="text-xs text-slate-300">Stops</p>
+                              <p className="text-base font-bold text-white mt-0.5" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{route.stops.length}</p>
                             </div>
                           </div>
                         </div>
 
                         {/* Stops */}
                         <div>
-                          <p className="text-xs text-slate-600 mb-3 uppercase tracking-wider">Stops & Passengers</p>
+                          <p className="text-xs text-slate-300 mb-3 uppercase tracking-wider">Stops & Passengers</p>
                           <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
                             {orderedStops.map((stop, idx) => (
                               <div key={stop.stop_id ?? idx}>
-                                <div className="rounded-xl border border-white/6 bg-white/3 p-4">
+                                <div className="rounded-xl bg-white/5 border border-white/10 p-4">
                                   <div className="flex items-start gap-3">
                                     <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold text-white ${
                                       isPickup ? 'bg-sky-500' : 'bg-emerald-500'
                                     }`}>
                                       {stop.sequence_order}
                                     </div>
-                                    <div className="flex-1">
+                                    <div className="flex-1 min-w-0">
                                       <div className="flex items-center justify-between mb-1 gap-3">
                                         <div className="min-w-0">
                                           {/* The solver names its own stops ("Agargaon Metro
                                               Station", "Mazar Road Bus Stop"); that beats a
-                                              reverse-geocoded street, and skips the lookup. */}
-                                          {stop.stop_name ? (
+                                              reverse-geocoded street, and skips the lookup.
+                                              An *ad-hoc* stop's "name" is a synthetic key instead
+                                              ("Ad-hoc (Employee Name)" / "Home (Employee Name)") —
+                                              the passenger's name is already shown below, so here
+                                              the driver needs the actual door address instead. */}
+                                          {stop.stop_name && !isSyntheticStopName(stop.stop_name, stop.is_adhoc) ? (
                                             <p className="text-sm font-medium text-white truncate">
                                               {stop.stop_name}
                                             </p>
@@ -364,16 +369,16 @@ export const DriverTodaysTrips: React.FC = () => {
                                             />
                                           )}
                                           {stop.latitude != null && stop.longitude != null && (
-                                            <p className="text-xs text-slate-600 font-mono mt-0.5">
+                                            <p className="text-xs text-slate-400 font-mono mt-0.5">
                                               {stop.latitude.toFixed(5)}, {stop.longitude.toFixed(5)}
                                             </p>
                                           )}
                                         </div>
                                         <div className="flex items-center gap-2 flex-shrink-0">
                                           {stop.arrival_time && (
-                                            <span className="text-xs text-slate-600 font-mono">{stop.arrival_time}</span>
+                                            <span className="text-xs text-slate-300 font-mono">{stop.arrival_time}</span>
                                           )}
-                                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${isPickup ? 'bg-sky-500/15 text-sky-400' : 'bg-emerald-500/15 text-emerald-400'}`}>
+                                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${isPickup ? 'bg-sky-400/20 text-sky-300' : 'bg-emerald-400/20 text-emerald-300'}`}>
                                             {isPickup ? 'pickup' : 'dropoff'}
                                           </span>
                                         </div>
@@ -382,13 +387,13 @@ export const DriverTodaysTrips: React.FC = () => {
                                       {stop.passengers.length > 0 && (
                                         <div className="space-y-1.5 mt-2">
                                           {stop.passengers.map((pax, pIdx) => (
-                                            <div key={pax.employee_id ?? pIdx} className="flex items-center justify-between bg-white/3 rounded-lg px-3 py-2 border border-white/5">
-                                              <div className="flex items-center gap-2">
-                                                <div className={`w-1.5 h-1.5 rounded-full ${pax.boarded ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                                                <span className="text-xs text-slate-300 font-medium">{pax.employee_name ?? `Employee #${pax.employee_id ?? '—'}`}</span>
+                                            <div key={pax.employee_id ?? pIdx} className="flex items-center justify-between gap-3 bg-white/5 rounded-lg px-3 py-2 border border-white/10">
+                                              <div className="flex items-center gap-2 min-w-0">
+                                                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${pax.boarded ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                                                <span className="text-xs text-slate-200 font-medium truncate">{pax.employee_name ?? `Employee #${pax.employee_id ?? '—'}`}</span>
                                               </div>
-                                              <div className="flex items-center gap-2">
-                                                <span className="text-xs text-slate-600">{pax.boarded ? 'Boarded' : 'Waiting'}</span>
+                                              <div className="flex items-center gap-2 flex-shrink-0">
+                                                <span className="text-xs text-slate-400 whitespace-nowrap">{pax.boarded ? 'Boarded' : 'Waiting'}</span>
                                                 <Switch
                                                   checked={!!pax.boarded}
                                                   onCheckedChange={() => void boardPassenger(route, stop.stop_id ?? 0, pax)}
@@ -399,7 +404,7 @@ export const DriverTodaysTrips: React.FC = () => {
                                         </div>
                                       )}
                                       {stop.passengers.length === 0 && (
-                                        <p className="text-xs text-slate-700 mt-1 italic">Destination stop — no boardings</p>
+                                        <p className="text-xs text-slate-400 mt-1 italic">Destination stop — no boardings</p>
                                       )}
                                     </div>
                                   </div>

@@ -291,6 +291,24 @@ class EmployeeService:
                     "capacity": v.get("capacity"),
                 }
 
+        # 4b. Every stop on each of these routes — every colleague sharing the
+        #    vehicle, not just this employee's own row from step 2 — so the map
+        #    can show the full sequence (1..N), not just one point.
+        all_stops_rows = (
+            self.db.table("route_stop")
+            .select(
+                "stop_id, route_id, latitude, longitude, sequence_order, "
+                "arrival_time, departure_time, stop_name, is_adhoc, is_shared"
+            )
+            .in_("route_id", list(routes_by_id))
+            .order("sequence_order")
+            .execute()
+            .data
+        ) or []
+        stops_by_route: dict = {}
+        for row in all_stops_rows:
+            stops_by_route.setdefault(row["route_id"], []).append(row)
+
         # 5. One leg per route, keyed by type. route.route_type is CHECK-constrained
         #    to 'pickup'/'dropoff', but normalise anyway so a stray case can't drop
         #    a leg on the floor.
@@ -319,6 +337,21 @@ class EmployeeService:
                     "is_adhoc": matched_stop.get("is_adhoc"),
                     "is_shared": matched_stop.get("is_shared"),
                 },
+                "stops": [
+                    {
+                        "stop_id": s["stop_id"],
+                        "sequence_order": s.get("sequence_order"),
+                        "latitude": s.get("latitude"),
+                        "longitude": s.get("longitude"),
+                        "arrival_time": s.get("arrival_time"),
+                        "departure_time": s.get("departure_time"),
+                        "stop_name": s.get("stop_name"),
+                        "is_adhoc": s.get("is_adhoc"),
+                        "is_shared": s.get("is_shared"),
+                        "is_mine": s["stop_id"] == matched_stop["stop_id"],
+                    }
+                    for s in stops_by_route.get(route_id, [])
+                ],
                 "driver": drivers_by_id.get(ra.get("driver_id")),
                 "vehicle": vehicles_by_id.get(ra.get("vehicle_id")),
             }

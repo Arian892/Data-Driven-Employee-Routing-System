@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Sidebar } from '../shared/Sidebar';
 import { AddressText } from '../shared/AddressText';
-import { Calendar, CalendarDays, MapPin, Clock, AlertCircle, Car, User as UserIcon, Route, Loader2, ChevronDown, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { Calendar, CalendarDays, ClipboardList, MapPin, Clock, AlertCircle, Route, Loader2, ChevronDown, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { InteractiveMap } from '../shared/InteractiveMap';
+import { ScheduleLegDetails, buildLegMarkers, coordinateLabel, MapLegend } from '../shared/ScheduleLeg';
 import { OFFICE_LOCATION } from '../../data/mockData';
 import { dropoffRequestApi, employeeApi, pickupRequestApi } from '../../services/transportApi';
 import type { DropoffRequest, PickupRequest, RequestStatus, ScheduleLeg, ScheduleResponse } from '../../types/api';
@@ -70,11 +71,6 @@ const dayLabel = (iso: string): string => {
 };
 
 // ── Normalizers ──────────────────────────────────────────────────────────────
-
-const coordinateLabel = (lat?: number | null, lng?: number | null) => {
-  if (lat == null || lng == null) return 'No location set';
-  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-};
 
 const normalizePickup = (request: PickupRequest): CombinedRequest => ({
   id: `pickup-${request.pickup_id}`,
@@ -191,68 +187,6 @@ const groupTitle = (g: WeekGroup): string => {
   return hasWeekly ? 'Weekly Request' : 'Ad-hoc Requests';
 };
 
-/** One leg of the night's assignment — the ride in, or the ride home.
- *
- * An employee has both on the same service date, so this renders once per leg
- * rather than collapsing the night to a single stop. */
-const ScheduleLegDetails: React.FC<{ leg: ScheduleLeg }> = ({ leg }) => {
-  const isPickup = leg.route_type === 'pickup';
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        {isPickup
-          ? <ArrowUpRight className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-          : <ArrowDownLeft className="w-4 h-4 text-violet-400 flex-shrink-0" />}
-        <p className="text-sm text-slate-300">
-          {isPickup ? 'Ride to office' : 'Ride home'} · stop {leg.stop.sequence_order}
-          {leg.shift_time ? ` · shift ${leg.shift_time.slice(0, 5)}` : ''}
-        </p>
-      </div>
-      <div className="flex items-center gap-2">
-        <MapPin className="w-4 h-4 text-sky-400 flex-shrink-0" />
-        <div className="text-sm">
-          {/* A named stop is the solver's own label — for a shared main-road drop
-              ("Agargaon Metro Station") that is the difference between the
-              employee walking to the right place and expecting a door pickup. */}
-          {leg.stop.stop_name ? (
-            <p className="text-slate-200">{leg.stop.stop_name}</p>
-          ) : (
-            <AddressText lat={leg.stop.latitude} lng={leg.stop.longitude} />
-          )}
-          {leg.stop.is_shared && (
-            <p className="text-xs text-violet-300 mt-0.5">
-              Shared drop point — walk from here to your home.
-            </p>
-          )}
-          <p className="text-xs text-slate-600 font-mono">{coordinateLabel(leg.stop.latitude, leg.stop.longitude)}</p>
-        </div>
-      </div>
-      {leg.stop.arrival_time && (
-        <div className="flex items-center gap-2">
-          <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />
-          <p className="text-sm text-slate-300">
-            {isPickup ? 'Pickup at' : 'Dropoff at'}: {leg.stop.arrival_time}
-          </p>
-        </div>
-      )}
-      {leg.driver && (
-        <div className="flex items-center gap-2">
-          <UserIcon className="w-4 h-4 text-sky-400 flex-shrink-0" />
-          <p className="text-sm text-slate-300">
-            Driver: {leg.driver.name}{leg.driver.phone ? ` · ${leg.driver.phone}` : ''}
-          </p>
-        </div>
-      )}
-      {leg.vehicle && (
-        <div className="flex items-center gap-2">
-          <Car className="w-4 h-4 text-sky-400 flex-shrink-0" />
-          <p className="text-sm text-slate-300">Vehicle: {leg.vehicle.plate_no ?? '—'}</p>
-        </div>
-      )}
-    </div>
-  );
-};
-
 export const MyRequests: React.FC = () => {
   const [activeTab, setActiveTab] = useState<RequestTab>('all');
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -361,14 +295,15 @@ export const MyRequests: React.FC = () => {
   };
 
   const StatusBadge = ({ status }: { status: string }) => {
-    const map: Record<string, { label: string; cls: string }> = {
-      Approved: { label: 'Approved', cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' },
-      Pending: { label: 'Pending', cls: 'bg-amber-500/15 text-amber-400 border-amber-500/20' },
-      Rejected: { label: 'Rejected', cls: 'bg-red-500/15 text-red-400 border-red-500/20' },
+    const map: Record<string, { label: string; dot: string; text: string }> = {
+      Approved: { label: 'Approved', dot: 'bg-emerald-500', text: 'text-emerald-700' },
+      Pending: { label: 'Pending', dot: 'bg-amber-500', text: 'text-amber-700' },
+      Rejected: { label: 'Rejected', dot: 'bg-red-500', text: 'text-red-700' },
     };
     const m = map[status] || map.Pending;
     return (
-      <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${m.cls}`}>
+      <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-stone-50 border border-stone-200 font-medium ${m.text}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${m.dot}`} />
         {m.label}
       </span>
     );
@@ -377,24 +312,31 @@ export const MyRequests: React.FC = () => {
   return (
     <Sidebar role="employee">
       <div className="p-6 max-w-5xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-1" style={{ fontFamily: 'Rajdhani, sans-serif' }}>My Requests</h1>
-          <p className="text-slate-500 text-sm">
-            Your requests grouped by service week — edit them any time in the request window.
-          </p>
+        <div className="flex items-center gap-4 pb-6 mb-6 border-b border-stone-200">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/70 border border-slate-100 flex items-center justify-center flex-shrink-0 shadow-sm">
+            <ClipboardList className="w-6 h-6 text-slate-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>My Requests</h1>
+            <p className="text-stone-500 text-sm mt-0.5">
+              Your requests grouped by service week — edit them any time in the request window.
+            </p>
+          </div>
         </div>
 
         {error && (
           <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/8 px-5 py-4 mb-6">
-            <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-red-300/90">{error}</p>
+            <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-red-700/90">{error}</p>
           </div>
         )}
 
-        {/* Stat pills */}
-        <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
+        {/* Filter tabs — one segmented control, not four floating pills, so
+            the four states read as views of one list rather than separate
+            buttons that happen to sit near each other. */}
+        <div className="inline-flex items-center gap-1 p-1 mb-6 rounded-xl bg-stone-100 overflow-x-auto max-w-full">
           {([
-            ['all', 'All Requests', 'text-slate-400'],
+            ['all', 'All Requests', 'text-slate-300'],
             ['routed', 'Routed', 'text-emerald-400'],
             ['pending', 'Pending', 'text-amber-400'],
             ['rejected', 'Rejected', 'text-red-400'],
@@ -402,14 +344,14 @@ export const MyRequests: React.FC = () => {
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition ${
+              className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
                 activeTab === key
-                  ? 'bg-white/8 border-white/15 text-white'
-                  : 'border-white/6 bg-white/3 text-slate-500 hover:text-slate-300'
+                  ? 'bg-card text-white shadow-sm'
+                  : 'text-stone-500 hover:text-stone-900'
               }`}
             >
               {label}
-              <span className={`text-xs font-bold ${activeTab === key ? 'text-white' : color}`}>
+              <span className={`text-xs font-bold ${activeTab === key ? color : 'text-stone-400'}`}>
                 {counts[key]}
               </span>
             </button>
@@ -419,30 +361,30 @@ export const MyRequests: React.FC = () => {
         {/* Week cards */}
         <div className="space-y-4">
           {isLoading && (
-            <div className="text-center py-16 text-slate-600">
+            <div className="text-center py-16 text-stone-500">
               <Clock className="w-10 h-10 mx-auto mb-3 opacity-30 animate-pulse" />
               <p>Loading your requests...</p>
             </div>
           )}
 
           {!isLoading && filteredGroups.length === 0 && (
-            <div className="text-center py-16 text-slate-600">
+            <div className="text-center py-16 text-stone-500">
               <Calendar className="w-10 h-10 mx-auto mb-3 opacity-30" />
               <p>No requests in this category.</p>
             </div>
           )}
 
           {filteredGroups.map(group => (
-            <div key={group.weekStart} className="rounded-xl border border-white/8 bg-card overflow-hidden">
+            <div key={group.weekStart} className="rounded-xl bg-card overflow-hidden shadow-sm">
               {/* Card header */}
               <div className="flex items-center justify-between px-5 py-4">
                 <div className="flex items-center gap-4">
-                  <div className="w-9 h-9 rounded-lg bg-sky-500/15 border border-sky-500/20 flex items-center justify-center">
-                    <CalendarDays className="w-4 h-4 text-sky-400" />
+                  <div className="w-9 h-9 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center">
+                    <CalendarDays className="w-4 h-4 text-white" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-white">{groupTitle(group)}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-slate-300 mt-0.5">
                       {weekLabel(group.weekStart)} · {group.days.length} day{group.days.length > 1 ? 's' : ''}
                     </p>
                   </div>
@@ -451,7 +393,7 @@ export const MyRequests: React.FC = () => {
               </div>
 
               {/* Day rows */}
-              <div className="border-t border-white/6">
+              <div className="border-t border-white/10">
                 {group.days.map(day => {
                   const key = `${group.weekStart}|${day.serviceDate}|${day.requestType}`;
                   const isExpanded = expandedKey === key;
@@ -461,25 +403,18 @@ export const MyRequests: React.FC = () => {
                   // if only that half got routed.
                   const legs: ScheduleLeg[] = [schedule?.pickup, schedule?.dropoff]
                     .filter((l): l is ScheduleLeg => Boolean(l));
-                  const stopLat = schedule?.routing_done && schedule.stop ? schedule.stop.latitude : (day.pickup?.latitude ?? OFFICE_LOCATION.latitude);
-                  const stopLng = schedule?.routing_done && schedule.stop ? schedule.stop.longitude : (day.pickup?.longitude ?? OFFICE_LOCATION.longitude);
-                  // A Case D drop lands at the shared metro point, nowhere near
-                  // the morning pickup, so mark it separately when it differs.
-                  const dropStop = schedule?.dropoff?.stop;
-                  const showDropMarker = Boolean(
-                    dropStop &&
-                    (dropStop.latitude !== stopLat || dropStop.longitude !== stopLng)
-                  );
+                  const fallbackLat = day.pickup?.latitude ?? OFFICE_LOCATION.latitude;
+                  const fallbackLng = day.pickup?.longitude ?? OFFICE_LOCATION.longitude;
 
                   return (
-                    <div key={key} className="border-t border-white/6 first:border-t-0">
+                    <div key={key} className="border-t border-white/10 first:border-t-0">
                       <div
-                        className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-white/3 transition"
+                        className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-white/5 transition"
                         onClick={() => setExpandedKey(isExpanded ? null : key)}
                       >
                         <div>
                           <p className="text-sm font-semibold text-white">{dayLabel(day.serviceDate)}</p>
-                          <div className="flex items-center gap-4 mt-1 text-xs text-slate-500">
+                          <div className="flex items-center gap-4 mt-1 text-xs text-slate-300">
                             {day.pickup && (
                               <span className="flex items-center gap-1.5">
                                 <ArrowUpRight className="w-3.5 h-3.5 text-sky-400" />
@@ -496,7 +431,7 @@ export const MyRequests: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-3">
                           {day.requestType === 'Ad-hoc' && (
-                            <span className="text-xs px-2.5 py-1 rounded-full border font-medium bg-violet-500/15 text-violet-400 border-violet-500/20">
+                            <span className="text-xs px-2.5 py-1 rounded-full border font-medium bg-violet-400/20 text-violet-200 border-violet-400/30">
                               Ad-hoc
                             </span>
                           )}
@@ -508,122 +443,121 @@ export const MyRequests: React.FC = () => {
                                 void handleCancel(day);
                               }}
                               disabled={cancelingDate === day.serviceDate}
-                              className="px-3 py-1.5 rounded-lg border border-red-500/20 bg-red-500/8 text-xs font-medium text-red-300 hover:bg-red-500/15 transition disabled:opacity-60"
+                              className="px-3 py-1.5 rounded-lg border border-red-400/30 bg-red-500/10 text-xs font-medium text-red-300 hover:bg-red-500/20 transition disabled:opacity-60"
                             >
                               {cancelingDate === day.serviceDate ? 'Canceling...' : 'Cancel'}
                             </button>
                           )}
-                          <ChevronDown className={`w-4 h-4 text-slate-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          <ChevronDown className={`w-4 h-4 text-slate-300 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                         </div>
                       </div>
 
                       {/* Expanded day details */}
                       {isExpanded && (
                         <div className="px-5 pb-5">
-                          <div className="pt-3 grid grid-cols-1 lg:grid-cols-2 gap-5">
-                            <div className="space-y-4">
-                              <div className="grid grid-cols-1 gap-3">
-                                {day.pickup && (
-                                  <div className="rounded-xl border border-sky-500/15 bg-sky-500/5 p-3">
-                                    <p className="text-xs text-slate-600 mb-1 uppercase tracking-wider flex items-center gap-1.5">
-                                      <ArrowUpRight className="w-3 h-3 text-sky-400" /> Pickup
-                                    </p>
-                                    <div className="flex items-start gap-2">
-                                      <MapPin className="w-4 h-4 text-sky-400 mt-0.5 flex-shrink-0" />
-                                      <div className="text-sm text-slate-300">
-                                        <AddressText lat={day.pickup.latitude} lng={day.pickup.longitude} />
-                                        <p className="text-xs text-slate-600 mt-0.5 font-mono">{coordinateLabel(day.pickup.latitude, day.pickup.longitude)}</p>
-                                        <p className="text-xs text-slate-500 mt-0.5">Shift start {day.pickup.shiftTime}</p>
-                                      </div>
+                          <div className="pt-3 space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {day.pickup && (
+                                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                                  <p className="text-xs text-slate-300 mb-1 uppercase tracking-wider flex items-center gap-1.5">
+                                    <ArrowUpRight className="w-3 h-3 text-sky-400" /> Pickup
+                                  </p>
+                                  <div className="flex items-start gap-2">
+                                    <MapPin className="w-4 h-4 text-sky-400 mt-0.5 flex-shrink-0" />
+                                    <div className="text-sm text-slate-200">
+                                      <AddressText lat={day.pickup.latitude} lng={day.pickup.longitude} className="text-slate-200" />
+                                      <p className="text-xs text-slate-400 mt-0.5 font-mono">{coordinateLabel(day.pickup.latitude, day.pickup.longitude)}</p>
+                                      <p className="text-xs text-slate-400 mt-0.5">Shift start {day.pickup.shiftTime}</p>
                                     </div>
                                   </div>
-                                )}
-                                {day.dropoff && (
-                                  <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-3">
-                                    <p className="text-xs text-slate-600 mb-1 uppercase tracking-wider flex items-center gap-1.5">
-                                      <ArrowDownLeft className="w-3 h-3 text-emerald-400" /> Dropoff
-                                    </p>
-                                    <div className="flex items-start gap-2">
-                                      <MapPin className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                                      <div className="text-sm text-slate-300">
-                                        <AddressText lat={day.dropoff.latitude} lng={day.dropoff.longitude} />
-                                        <p className="text-xs text-slate-600 mt-0.5 font-mono">{coordinateLabel(day.dropoff.latitude, day.dropoff.longitude)}</p>
-                                        <p className="text-xs text-slate-500 mt-0.5">Shift end {day.dropoff.shiftTime}</p>
-                                      </div>
+                                </div>
+                              )}
+                              {day.dropoff && (
+                                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                                  <p className="text-xs text-slate-300 mb-1 uppercase tracking-wider flex items-center gap-1.5">
+                                    <ArrowDownLeft className="w-3 h-3 text-emerald-400" /> Dropoff
+                                  </p>
+                                  <div className="flex items-start gap-2">
+                                    <MapPin className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                                    <div className="text-sm text-slate-200">
+                                      <AddressText lat={day.dropoff.latitude} lng={day.dropoff.longitude} className="text-slate-200" />
+                                      <p className="text-xs text-slate-400 mt-0.5 font-mono">{coordinateLabel(day.dropoff.latitude, day.dropoff.longitude)}</p>
+                                      <p className="text-xs text-slate-400 mt-0.5">Shift end {day.dropoff.shiftTime}</p>
                                     </div>
                                   </div>
-                                )}
-                              </div>
-
-                              {status === 'Approved' && (
-                                <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/6 p-4 space-y-3">
-                                  <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Route Assignment</p>
-                                  {scheduleLoading[day.serviceDate] ? (
-                                    <div className="flex items-center gap-2 text-sm text-slate-500">
-                                      <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                                      Loading your route...
-                                    </div>
-                                  ) : schedule?.routing_done && legs.length > 0 ? (
-                                    <div className="space-y-4">
-                                      {legs.map((leg, i) => (
-                                        <div
-                                          key={leg.route_id}
-                                          className={i > 0 ? 'pt-4 border-t border-emerald-500/15' : undefined}
-                                        >
-                                          <ScheduleLegDetails leg={leg} />
-                                        </div>
-                                      ))}
-                                      {legs.length === 1 && (
-                                        <p className="text-xs text-slate-500">
-                                          {legs[0].route_type === 'pickup'
-                                            ? 'Your ride home has not been assigned for this date.'
-                                            : 'Your ride to the office has not been assigned for this date.'}
-                                        </p>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <div className="space-y-2">
-                                      <div className="flex items-center gap-2">
-                                        <Route className="w-4 h-4 text-emerald-400" />
-                                        <p className="text-sm text-slate-300">
-                                          Route assigned — stop details will appear after routing completes.
-                                        </p>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <Clock className="w-4 h-4 text-amber-400" />
-                                        <p className="text-sm text-slate-300">Scheduled time: {day.pickup?.shiftTime ?? day.dropoff?.shiftTime}</p>
-                                      </div>
-                                    </div>
-                                  )}
                                 </div>
                               )}
                             </div>
 
-                            {/* Map */}
-                            <div>
-                              <p className="text-xs text-slate-600 mb-2 uppercase tracking-wider">Location Map</p>
-                              <InteractiveMap
-                                center={[stopLat, stopLng]}
-                                zoom={14}
-                                markers={[
-                                  { position: [stopLat, stopLng], label: schedule?.routing_done ? (legs.length > 1 ? 'Your Pickup Stop' : 'Your Stop') : 'Your Location', color: '#0EA5E9' },
-                                  ...(showDropMarker && dropStop
-                                    ? [{
-                                        position: [dropStop.latitude, dropStop.longitude] as [number, number],
-                                        label: dropStop.is_shared ? 'Shared Drop Point' : 'Your Drop Stop',
-                                        color: '#8B5CF6',
-                                      }]
-                                    : []),
-                                  ...(status === 'Approved'
-                                    ? [{ position: [OFFICE_LOCATION.latitude, OFFICE_LOCATION.longitude] as [number, number], label: 'Office', color: '#10B981' }]
-                                    : []),
-                                ]}
-                                showRoute={status === 'Approved'}
-                                routeGeometry={schedule?.route_geometry}
-                                height="240px"
-                                lazy
-                              />
-                            </div>
+                            {status === 'Approved' && (
+                              scheduleLoading[day.serviceDate] ? (
+                                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                                  <div className="flex items-center gap-2 text-sm text-slate-300">
+                                    <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                                    Loading your route...
+                                  </div>
+                                </div>
+                              ) : schedule?.routing_done && legs.length > 0 ? (
+                                <>
+                                  {/* One panel per leg — pickup and dropoff are separate
+                                      vehicles/drivers/routes, so each gets its own map. */}
+                                  {legs.map(leg => (
+                                    <div key={leg.route_id} className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                                      <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+                                        <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+                                          {leg.route_type === 'pickup' ? 'Pickup Route' : 'Dropoff Route'}
+                                        </p>
+                                        <ScheduleLegDetails leg={leg} />
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-slate-300 mb-2 uppercase tracking-wider">Route Map</p>
+                                        <InteractiveMap
+                                          center={[leg.stop.latitude, leg.stop.longitude]}
+                                          zoom={14}
+                                          markers={buildLegMarkers(leg)}
+                                          fitToMarkers
+                                          showRoute
+                                          routeGeometry={leg.route_geometry}
+                                          height="260px"
+                                          lazy
+                                        />
+                                        <MapLegend />
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {legs.length === 1 && (
+                                    <p className="text-xs text-stone-500">
+                                      {legs[0].route_type === 'pickup'
+                                        ? 'Your ride home has not been assigned for this date.'
+                                        : 'Your ride to the office has not been assigned for this date.'}
+                                    </p>
+                                  )}
+                                </>
+                              ) : (
+                                <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/6 p-4 space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <Route className="w-4 h-4 text-emerald-600" />
+                                    <p className="text-sm text-stone-700">
+                                      Route assigned — stop details will appear after routing completes.
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-4 h-4 text-amber-600" />
+                                    <p className="text-sm text-stone-700">Scheduled time: {day.pickup?.shiftTime ?? day.dropoff?.shiftTime}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-stone-500 mb-2 uppercase tracking-wider">Location Map</p>
+                                    <InteractiveMap
+                                      center={[fallbackLat, fallbackLng]}
+                                      zoom={14}
+                                      markers={[{ position: [fallbackLat, fallbackLng], label: 'Your Location', variant: 'mine' }]}
+                                      height="240px"
+                                      lazy
+                                    />
+                                  </div>
+                                </div>
+                              )
+                            )}
                           </div>
                         </div>
                       )}

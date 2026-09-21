@@ -57,7 +57,7 @@ export const AdminLoginPage: React.FC = () => {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 mb-4">
             <ShieldCheck className="w-7 h-7 text-amber-400" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+          <h1 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
             Admin Portal
           </h1>
           <p className="text-slate-500 text-sm">Restricted access. Authorized personnel only.</p>

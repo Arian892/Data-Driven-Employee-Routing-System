@@ -8,7 +8,7 @@ import { useAddress } from '../../services/geocode';
  * resolving it shows a muted placeholder rather than repeating the coordinates
  * that are usually printed underneath.
  *
- * Pass `className` to style the resolved text (defaults to `text-slate-300`).
+ * Pass `className` to style the resolved text (defaults to `text-stone-700`).
  */
 export const AddressText: React.FC<{ lat?: number | null; lng?: number | null; className?: string }> = ({
   lat,
@@ -16,7 +16,11 @@ export const AddressText: React.FC<{ lat?: number | null; lng?: number | null; c
   className,
 }) => {
   const address = useAddress(lat, lng);
-  if (lat == null || lng == null) return <span className="text-slate-500">No location set</span>;
-  if (!address) return <span className="text-slate-500">Locating address…</span>;
-  return <span className={className ?? 'text-slate-300'}>{address}</span>;
+  // `block` (not the default inline) so a caller's `truncate` class actually
+  // takes effect — Tailwind's truncate (overflow/text-overflow/nowrap) is a
+  // no-op on inline elements, so a long address would otherwise overflow its
+  // row instead of ellipsizing, pushing sibling content out of view.
+  if (lat == null || lng == null) return <span className="block text-stone-500">No location set</span>;
+  if (!address) return <span className="block text-stone-500">Locating address…</span>;
+  return <span className={`block ${className ?? 'text-stone-700'}`}>{address}</span>;
 };
