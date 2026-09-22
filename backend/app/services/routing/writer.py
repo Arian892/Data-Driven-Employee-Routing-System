@@ -23,11 +23,19 @@ route, no error anywhere.
 import logging
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
+from postgrest.exceptions import APIError
 from supabase import Client
 
 from app.services.routing.adapter import RoutingContext
 
 logger = logging.getLogger(__name__)
+
+# PostgREST's "column not in schema cache" — thrown if `route.geometry_source`
+# hasn't been added yet (see the migration note on `_write_routes`). PostgREST
+# validates against its own cached schema before touching Postgres, so this is
+# its own error code, not the raw Postgres "undefined_column" (42703). Caught
+# narrowly so any other insert failure still surfaces normally.
+_UNKNOWN_COLUMN = "PGRST204"
 
 # PostgREST puts filter values in the URL, so a long `.in_()` list can blow past
 # the server's URL length limit. Chunk well below it.
@@ -133,7 +141,7 @@ class RoutingWriter:
             self.db.table(table).insert(list(chunk)).execute()
             self._count()
 
-    def _write_routes(self, solved, ctx: RoutingContext) -> Dict[str, int]:
+    def _write_routes(self, solved, ctx: RoutingContext, engine: Optional[str] = None) -> Dict[str, int]:
         """Insert routes, then read back `route_code → route_id`."""
         payload = []
         for r in solved.routes:
@@ -148,8 +156,32 @@ class RoutingWriter:
                 # the column is an integer minute count
                 "total_travel_time_min": int(round(r["total_minutes"])),
                 "route_geometry": r.get("route_geometry"),
+                # Which DistanceProvider actually produced this route's geometry
+                # ("osrm" = real road path, "haversine" = straight-line fallback).
+                # Without this, telling the two apart after the fact means
+                # forensically counting geometry points against created_at —
+                # this makes it a one-column query instead.
+                "geometry_source": engine,
             })
-        self._insert("route", payload)
+        try:
+            self._insert("route", payload)
+        except APIError as exc:
+            if exc.code != _UNKNOWN_COLUMN or "geometry_source" not in str(exc):
+                raise
+            # Schema migration (`ALTER TABLE route ADD COLUMN geometry_source
+            # text;`) hasn't been applied yet. Degrade instead of failing the
+            # whole solve over a column that's purely for after-the-fact
+            # auditing — but say so loudly, since silence is exactly how the
+            # straight-line-geometry bug went unnoticed for so long.
+            logger.error(
+                "route.geometry_source column does not exist yet — retrying this "
+                "insert without it. Run the pending migration to add it "
+                "(ALTER TABLE route ADD COLUMN geometry_source text;) so future "
+                "solves record which engine produced each route's geometry."
+            )
+            for row in payload:
+                row.pop("geometry_source", None)
+            self._insert("route", payload)
 
         code_to_id: Dict[str, int] = {}
         rows = (
@@ -289,7 +321,7 @@ class RoutingWriter:
 
     # ── entry point ──────────────────────────────────────────────────────────
 
-    def persist(self, solved, ctx: RoutingContext) -> Dict[str, Any]:
+    def persist(self, solved, ctx: RoutingContext, engine: Optional[str] = None) -> Dict[str, Any]:
         """Replace the service date's routes with this solve. Returns a summary."""
         self.calls = 0
         cleared = self.clear(ctx.service_date)
@@ -309,7 +341,7 @@ class RoutingWriter:
                 "warnings": warnings,
             }
 
-        code_to_id = self._write_routes(solved, ctx)
+        code_to_id = self._write_routes(solved, ctx, engine)
         key_to_stop = self._write_stops(solved, code_to_id)
         passengers, passenger_warnings = self._write_passengers(solved, ctx, code_to_id, key_to_stop)
         assignments = self._write_assignments(solved, ctx, code_to_id)
@@ -331,8 +363,8 @@ class RoutingWriter:
         return summary
 
 
-def persist(db: Client, solved, ctx: RoutingContext) -> Dict[str, Any]:
-    return RoutingWriter(db).persist(solved, ctx)
+def persist(db: Client, solved, ctx: RoutingContext, engine: Optional[str] = None) -> Dict[str, Any]:
+    return RoutingWriter(db).persist(solved, ctx, engine)
 
 
 def clear(db: Client, service_date: str) -> Dict[str, int]:

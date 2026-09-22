@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Bus, Mail, Lock, Eye, EyeOff, UserCircle, Truck } from 'lucide-react';
+import { Bus, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { mockUsers } from '../../data/mockData';
 import { authApi } from '../../services/transportApi';
 
 export const LoginPage: React.FC = () => {
@@ -41,40 +40,19 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const quickLogin = (role: 'employee' | 'driver') => {
-    const u = mockUsers.find(u => u.role === role);
-    if (u) {
-      setEmail(u.email);
-      setPassword(u.password || 'demo123');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Left panel — branding */}
+      {/* Left panel — branding, same flat slate-blue as the logged-in app's sidebar/cards */}
       <div
         className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden"
-        style={{
-          background: 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 50%, #F1F5F9 100%)',
-        }}
+        style={{ background: '#3F4B5E' }}
       >
-        {/* Decorative grid */}
-        <div
-          className="absolute inset-0 opacity-10"
-          style={{
-            backgroundImage: 'linear-gradient(rgba(14,165,233,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(14,165,233,0.3) 1px, transparent 1px)',
-            backgroundSize: '60px 60px',
-          }}
-        />
-        {/* Glow */}
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
-
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-sky-500/20 border border-sky-500/30 flex items-center justify-center">
-              <Bus className="w-5 h-5 text-sky-700" />
+            <div className="w-10 h-10 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center">
+              <Bus className="w-5 h-5 text-white" />
             </div>
-            <span className="font-rajdhani text-xl font-bold text-stone-900 tracking-wide" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+            <span className="text-xl font-bold text-white tracking-wide" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
               TranspoRT
             </span>
           </div>
@@ -82,35 +60,30 @@ export const LoginPage: React.FC = () => {
 
         <div className="relative z-10 space-y-6">
           <div>
-            <h1 className="text-5xl font-bold text-stone-900 leading-tight mb-4" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+            <h1 className="text-5xl font-bold text-white leading-tight mb-4" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
               Your Daily<br />
-              <span className="text-sky-600">Commute,</span><br />
+              <span className="text-amber-300">Commute,</span><br />
               Simplified.
             </h1>
-            <p className="text-stone-600 text-lg leading-relaxed max-w-sm">
+            <p className="text-slate-300 text-lg leading-relaxed max-w-sm">
               Corporate transport route management for Dhaka&apos;s workforce. Request pickups, track routes, arrive on time.
             </p>
           </div>
 
           <div className="flex gap-6">
             <div className="text-center">
-              <p className="text-3xl font-bold text-sky-600" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>500+</p>
-              <p className="text-stone-500 text-sm mt-1">Employees</p>
+              <p className="text-3xl font-bold text-white" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>900+</p>
+              <p className="text-slate-300 text-sm mt-1">Employees</p>
             </div>
-            <div className="w-px bg-stone-700" />
+            <div className="w-px bg-white/15" />
             <div className="text-center">
-              <p className="text-3xl font-bold text-amber-600" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>24</p>
-              <p className="text-stone-500 text-sm mt-1">Vehicles</p>
-            </div>
-            <div className="w-px bg-stone-700" />
-            <div className="text-center">
-              <p className="text-3xl font-bold text-emerald-600" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>98%</p>
-              <p className="text-stone-500 text-sm mt-1">On-Time Rate</p>
+              <p className="text-3xl font-bold text-amber-300" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>40+</p>
+              <p className="text-slate-300 text-sm mt-1">Vehicles</p>
             </div>
           </div>
         </div>
 
-        <p className="relative z-10 text-stone-500 text-xs">© 2026 TranspoRT Systems. All rights reserved.</p>
+        <p className="relative z-10 text-slate-400 text-xs">© 2026 TranspoRT Systems. All rights reserved.</p>
       </div>
 
       {/* Right panel — form */}
@@ -118,8 +91,8 @@ export const LoginPage: React.FC = () => {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-3 mb-10">
-            <div className="w-10 h-10 rounded-lg bg-sky-500/20 border border-sky-500/30 flex items-center justify-center">
-              <Bus className="w-5 h-5 text-sky-700" />
+            <div className="w-10 h-10 rounded-lg bg-[#3F4B5E] flex items-center justify-center">
+              <Bus className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-bold text-stone-900 tracking-wide" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
               TranspoRT
@@ -148,7 +121,7 @@ export const LoginPage: React.FC = () => {
                   onChange={e => setEmail(e.target.value)}
                   placeholder="your.email@company.com"
                   required
-                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-stone-200 bg-stone-50 text-stone-900 placeholder:text-stone-500 focus:outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/30 transition"
+                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-stone-200 bg-stone-50 text-stone-900 placeholder:text-stone-500 focus:outline-none focus:border-slate-500/60 focus:ring-1 focus:ring-slate-500/30 transition"
                 />
               </div>
             </div>
@@ -165,7 +138,7 @@ export const LoginPage: React.FC = () => {
                   onChange={e => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   required
-                  className="w-full pl-10 pr-12 py-3 rounded-lg border border-stone-200 bg-stone-50 text-stone-900 placeholder:text-stone-500 focus:outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/30 transition"
+                  className="w-full pl-10 pr-12 py-3 rounded-lg border border-stone-200 bg-stone-50 text-stone-900 placeholder:text-stone-500 focus:outline-none focus:border-slate-500/60 focus:ring-1 focus:ring-slate-500/30 transition"
                 />
                 <button
                   type="button"
@@ -198,27 +171,6 @@ export const LoginPage: React.FC = () => {
               )}
             </button>
           </form>
-
-          {/* Demo quick login */}
-          <div className="mt-8 pt-6 border-t border-stone-200">
-            <p className="text-xs text-stone-500 text-center mb-4 uppercase tracking-wider">Demo Access</p>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => quickLogin('employee')}
-                className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 text-sm transition"
-              >
-                <UserCircle className="w-4 h-4" />
-                Employee Demo
-              </button>
-              <button
-                onClick={() => quickLogin('driver')}
-                className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 text-sm transition"
-              >
-                <Truck className="w-4 h-4" />
-                Driver Demo
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>
