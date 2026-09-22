@@ -300,20 +300,20 @@ export const DriverTodaysTrips: React.FC = () => {
                   {/* Expanded */}
                   {isOpen && (
                     <div className="border-t border-white/10 p-5">
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                         {/* Map */}
-                        <div>
+                        <div className="lg:col-span-3">
                           <p className="text-xs text-slate-300 mb-3 uppercase tracking-wider">Route Map</p>
                           <InteractiveMap
                             center={firstStop ? [firstStop.latitude ?? OFFICE_LOCATION.latitude, firstStop.longitude ?? OFFICE_LOCATION.longitude] : [OFFICE_LOCATION.latitude, OFFICE_LOCATION.longitude]}
-                            markers={buildDriverStopMarkers(orderedStops, route.route_type)}
+                            markers={buildDriverStopMarkers(orderedStops, route.route_type, route.route_geometry)}
                             fitToMarkers
                             showRoute
                             routeGeometry={route.route_geometry}
                             height="380px"
                             lazy
                           />
-                          <MapLegend showMine={false} />
+                          <MapLegend showMine={false} routeType={route.route_type === 'dropoff' ? 'dropoff' : 'pickup'} />
                           <div className="grid grid-cols-3 gap-2 mt-3">
                             <div className="rounded-lg bg-white/5 border border-white/10 p-3 text-center">
                               <p className="text-xs text-slate-300">Distance</p>
@@ -335,7 +335,7 @@ export const DriverTodaysTrips: React.FC = () => {
                         </div>
 
                         {/* Stops */}
-                        <div>
+                        <div className="lg:col-span-2">
                           <p className="text-xs text-slate-300 mb-3 uppercase tracking-wider">Stops & Passengers</p>
                           <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
                             {orderedStops.map((stop, idx) => (

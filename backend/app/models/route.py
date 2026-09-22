@@ -55,6 +55,12 @@ class PickupRoutingRunPayload(BaseModel):
     office_lng: Optional[float] = None
     office_buffer_minutes: Optional[int] = 10
     stop_dwell_minutes: Optional[int] = 5
+    # Bypasses the "just solved this date in the last 2 minutes" dedup guard —
+    # for a deliberate manual re-run right after fixing routing-affecting data
+    # (an employee's coordinates, a vehicle, office location, etc.). Never set
+    # by the scheduler; only an admin explicitly asking for it should skip the
+    # guard, since that guard is what stops accidental duplicate/retried runs.
+    force: bool = False
     # Applies only to the haversine fallback; ignored when OSRM answers, because
     # OSRM's durations come from the road network.
     average_speed_kmph: Optional[float] = 40.0
@@ -68,6 +74,8 @@ class DropoffRoutingRunPayload(BaseModel):
     office_buffer_minutes: Optional[int] = 10
     stop_dwell_minutes: Optional[int] = 5
     average_speed_kmph: Optional[float] = 40.0
+    # See PickupRoutingRunPayload.force.
+    force: bool = False
 
 
 class UnassignedEntry(BaseModel):

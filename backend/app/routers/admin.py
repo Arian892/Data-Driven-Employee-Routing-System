@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from app.database import supabase
 from app.dependencies import require_admin, TokenData
 from app.models.common import paginate
@@ -25,7 +25,7 @@ from app.models.route import (
 from app.scheduler import run_all_pending, run_pending_routing
 from app.services.employee_service import EmployeeService
 from app.services.route_service import RouteService
-from app.services.routing_service import RoutingService
+from app.services.routing_service import DuplicateSolveError, RoutingService
 from app.services.zone_service import ZoneService
 
 router = APIRouter()
@@ -63,7 +63,10 @@ def run_pickup_routing(
     _: TokenData = Depends(require_admin),
     svc: RoutingService = Depends(_routing_svc),
 ):
-    return svc.run_pickup_routing(payload)
+    try:
+        return svc.run_pickup_routing(payload)
+    except DuplicateSolveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @router.post("/admin/dropoff-routing/run", response_model=RoutingRunResponse)
@@ -72,7 +75,10 @@ def run_dropoff_routing(
     _: TokenData = Depends(require_admin),
     svc: RoutingService = Depends(_routing_svc),
 ):
-    return svc.run_dropoff_routing(payload)
+    try:
+        return svc.run_dropoff_routing(payload)
+    except DuplicateSolveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @router.post("/admin/routing/auto-run")

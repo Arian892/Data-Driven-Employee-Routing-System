@@ -19,6 +19,7 @@ The public surface is unchanged, so `app/scheduler.py`, `app/routers/admin.py`,
 """
 import logging
 import threading
+import time
 from typing import Any, Dict, List, Optional
 
 from supabase import Client
@@ -47,6 +48,26 @@ logger = logging.getLogger("uvicorn.error")
 # service dates and then calls `run_service_date`, which takes it again on the
 # same thread.
 ROUTING_LOCK = threading.RLock()
+
+# Guards against a date being re-solved immediately after it just succeeded —
+# observed in practice: a slow solve (minutes) outlives an nginx proxy timeout
+# (seconds), and either the client or the proxy retries the same request, or an
+# unrelated caller (scheduler tick, admin click) fires for the same date while
+# the first attempt is still running. `ROUTING_LOCK` only prevents the two
+# attempts from literally overlapping their DB writes — it does nothing to stop
+# the SECOND one from queuing up and redoing the exact same work once the first
+# finishes, which is a second independent roll of the dice on OSRM being
+# reachable at that moment. This is a separate, lightweight lock: checked before
+# any expensive work starts, keyed by service_date, protecting every entry point
+# (scheduler and admin-triggered alike) uniformly.
+_DEDUP_LOCK = threading.Lock()
+_IN_PROGRESS: set[str] = set()
+_LAST_SOLVED_AT: Dict[str, float] = {}
+_DEDUP_WINDOW_SECONDS = 120.0
+
+
+class DuplicateSolveError(RuntimeError):
+    """A solve for this service date is already running or just completed."""
 
 
 class RoutingService:
@@ -108,7 +129,8 @@ class RoutingService:
         an admin checking one shift sees only that shift.
         """
         solved, ctx, summary, engine = self._solve(
-            payload.service_date, payload.office_lat, payload.office_lng, payload.average_speed_kmph
+            payload.service_date, payload.office_lat, payload.office_lng, payload.average_speed_kmph,
+            force=payload.force,
         )
         return self._response(
             solved, ctx, summary, engine,
@@ -120,7 +142,8 @@ class RoutingService:
     def run_dropoff_routing(self, payload: DropoffRoutingRunPayload) -> RoutingRunResponse:
         """Solve the service date and report the drop-off half."""
         solved, ctx, summary, engine = self._solve(
-            payload.service_date, payload.office_lat, payload.office_lng, payload.average_speed_kmph
+            payload.service_date, payload.office_lat, payload.office_lng, payload.average_speed_kmph,
+            force=payload.force,
         )
         return self._response(
             solved, ctx, summary, engine,
@@ -147,6 +170,41 @@ class RoutingService:
             "pickup": _count("pickup_request"),
             "dropoff": _count("dropoff_request"),
         }
+
+    def has_routes(self, service_date: str) -> bool:
+        """Whether this service date has already been solved at least once.
+
+        Almost every night leaves a handful of requests genuinely unroutable
+        (bad coordinates, cap-shed, no vehicle available) — the same reasons a
+        re-solve would hit again, since nothing about the inputs changed. That
+        means `pending_counts()` almost never reaches zero, so using it as the
+        "is this date done" signal makes the scheduler re-solve the WHOLE date
+        (clear + rewrite, a fresh gamble on OSRM's availability) every time the
+        backend process restarts and its in-memory `_processed_*` guards reset.
+        Checking for existing routes instead is restart-proof: once a date has
+        been solved, only a genuinely new trigger (the 7pm ad-hoc pass, or an
+        admin's manual re-run) should touch it again — not a routine restart.
+        """
+        res = (
+            self.db.table("route")
+            .select("route_id")
+            .eq("service_date", service_date)
+            .limit(1)
+            .execute()
+        )
+        return bool(res.data)
+
+    def latest_route_created_at(self, service_date: str) -> Optional[str]:
+        """ISO timestamp of the most recently created route for this date, if any."""
+        res = (
+            self.db.table("route")
+            .select("created_at")
+            .eq("service_date", service_date)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return res.data[0]["created_at"] if res.data else None
 
     def run_service_date(
         self,
@@ -190,48 +248,94 @@ class RoutingService:
         office_lat: Optional[float],
         office_lng: Optional[float],
         average_speed_kmph: Optional[float],
+        force: bool = False,
     ):
         """Load, solve, persist — under the lock. Returns (solved, ctx, summary, engine)."""
-        office = (
-            office_lat if office_lat is not None else OFFICE_LOCATION["lat"],
-            office_lng if office_lng is not None else OFFICE_LOCATION["lng"],
-        )
-        cfg = SolverConfig(office=office)
-
-        provider = get_provider()
-        # `average_speed_kmph` is meaningful only for the straight-line fallback;
-        # OSRM's durations come from the road network and overriding them would
-        # be a lie about how long the trip takes.
-        if average_speed_kmph and isinstance(provider, HaversineProvider):
-            provider = HaversineProvider(average_speed_kmph=average_speed_kmph)
-        # The pedestrian network (Case A walk times) is a separate engine; it
-        # degrades to straight-line walking times if no foot server answers.
-        foot = get_foot_provider()
-        engine = getattr(provider, "name", "unknown")
-
+        self._claim_solve_slot(service_date, force=force)
         try:
-            with ROUTING_LOCK:
-                ctx = routing_adapter.load(self.db, service_date)
-                logger.info(
-                    "routing %s: engine=%s inputs=%s", service_date, engine, ctx.stats
-                )
-                solved = solve_night(
-                    service_date=service_date,
-                    provider=provider,
-                    foot=foot,
-                    cfg=cfg,
-                    **ctx.solver_input,
-                )
-                summary = routing_writer.persist(self.db, solved, ctx)
-            logger.info("routing %s: %s", service_date, summary)
-            return solved, ctx, summary, engine
+            office = (
+                office_lat if office_lat is not None else OFFICE_LOCATION["lat"],
+                office_lng if office_lng is not None else OFFICE_LOCATION["lng"],
+            )
+            cfg = SolverConfig(office=office)
+
+            provider = get_provider()
+            # `average_speed_kmph` is meaningful only for the straight-line fallback;
+            # OSRM's durations come from the road network and overriding them would
+            # be a lie about how long the trip takes.
+            if average_speed_kmph and isinstance(provider, HaversineProvider):
+                provider = HaversineProvider(average_speed_kmph=average_speed_kmph)
+            # The pedestrian network (Case A walk times) is a separate engine; it
+            # degrades to straight-line walking times if no foot server answers.
+            foot = get_foot_provider()
+            engine = getattr(provider, "name", "unknown")
+
+            try:
+                with ROUTING_LOCK:
+                    ctx = routing_adapter.load(self.db, service_date)
+                    logger.info(
+                        "routing %s: engine=%s inputs=%s", service_date, engine, ctx.stats
+                    )
+                    solved = solve_night(
+                        service_date=service_date,
+                        provider=provider,
+                        foot=foot,
+                        cfg=cfg,
+                        **ctx.solver_input,
+                    )
+                    summary = routing_writer.persist(self.db, solved, ctx, engine)
+                logger.info("routing %s: %s", service_date, summary)
+                return solved, ctx, summary, engine
+            finally:
+                close = getattr(provider, "close", None)
+                if callable(close):
+                    close()
+                close_foot = getattr(foot, "close", None)
+                if callable(close_foot):
+                    close_foot()
         finally:
-            close = getattr(provider, "close", None)
-            if callable(close):
-                close()
-            close_foot = getattr(foot, "close", None)
-            if callable(close_foot):
-                close_foot()
+            self._release_solve_slot(service_date)
+
+    @staticmethod
+    def _claim_solve_slot(service_date: str, force: bool = False) -> None:
+        """Reject a solve for `service_date` if one is already running, or one
+        just finished within `_DEDUP_WINDOW_SECONDS`.
+
+        A full solve takes minutes; an nginx proxy timeout is typically under a
+        minute. That gap is exactly what let a retried or duplicate request
+        silently redo — and sometimes worsen — a solve that had already
+        succeeded, which is the actual failure mode observed in production.
+        This makes that impossible: only one attempt per date can ever be live
+        or freshly completed at a time, regardless of which caller (scheduler
+        tick, admin click, a retried HTTP request) triggers it.
+
+        `force` (admin-only, via `payload.force`) skips only the "just solved
+        recently" check — a deliberate re-run right after fixing
+        routing-affecting data is legitimate and shouldn't wait out the window.
+        It never skips the "already running" check: two solves for the same
+        date overlapping their clear-then-rewrite is a correctness issue, not
+        just a wasted duplicate, so that guard is absolute regardless of force.
+        """
+        with _DEDUP_LOCK:
+            if service_date in _IN_PROGRESS:
+                raise DuplicateSolveError(
+                    f"A solve for {service_date} is already running — refusing to start a second one."
+                )
+            if not force:
+                last = _LAST_SOLVED_AT.get(service_date)
+                if last is not None and (time.monotonic() - last) < _DEDUP_WINDOW_SECONDS:
+                    raise DuplicateSolveError(
+                        f"{service_date} was just solved {time.monotonic() - last:.0f}s ago — "
+                        f"refusing to immediately re-solve (likely a retried/duplicate request). "
+                        f"Pass force=true to override for a deliberate manual re-run."
+                    )
+            _IN_PROGRESS.add(service_date)
+
+    @staticmethod
+    def _release_solve_slot(service_date: str) -> None:
+        with _DEDUP_LOCK:
+            _IN_PROGRESS.discard(service_date)
+            _LAST_SOLVED_AT[service_date] = time.monotonic()
 
     def _response(
         self,

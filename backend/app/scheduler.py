@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 
 from app.config import settings
 from app.database import supabase
-from app.services.routing_service import ROUTING_LOCK, RoutingService
+from app.services.routing_service import ROUTING_LOCK, DuplicateSolveError, RoutingService
 from app.services.week_service import ADHOC_CUTOFF_TIME, current_week_start
 
 logger = logging.getLogger("uvicorn.error")
@@ -72,15 +72,28 @@ def run_pending_routing(force: bool = False) -> dict:
                 # earlier this week is already being served — leave its routes
                 # (and any ad-hoc rebuilds) exactly as they were solved
                 continue
+            # Restart-proof "already done" check — see `has_routes`'s docstring.
+            # A date that already has routes is left alone here even if a few
+            # requests are still stuck Pending (permanently unroutable ones,
+            # not new work); today's date gets its own separate re-solve via
+            # the 7pm ad-hoc pass below, and anything else is an explicit
+            # admin action, not something a routine restart should trigger.
+            if svc.has_routes(iso):
+                continue
             counts = svc.pending_counts(iso)
             if counts["pickup"] == 0 and counts["dropoff"] == 0:
+                continue
+            try:
+                result = svc.run_service_date(iso)
+            except DuplicateSolveError as exc:
+                logger.info("routing %s: skipped — %s", iso, exc)
                 continue
             summary["ran"] = True
             summary["weeks"].append(
                 {
                     "service_date": iso,
                     "counts": counts,
-                    "result": svc.run_service_date(iso),
+                    "result": result,
                 }
             )
 
@@ -113,12 +126,17 @@ def run_daily_rerouting(force: bool = False) -> dict:
         if counts["pickup"] == 0 and counts["dropoff"] == 0:
             return {"ran": False, "reason": "nothing pending for today", "service_date": today}
 
+        try:
+            result = svc.run_service_date(today)
+        except DuplicateSolveError as exc:
+            return {"ran": False, "reason": str(exc), "service_date": today}
+
         _processed_dates.add(today)
         return {
             "ran": True,
             "service_date": today,
             "counts": counts,
-            "result": svc.run_service_date(today),
+            "result": result,
         }
 
 
@@ -160,7 +178,12 @@ def run_all_pending(force: bool = True) -> dict:
 
         summary = {"ran": True, "dates": []}
         for iso in sorted(dates):
-            created, assigned, unassigned = _totals(svc.run_service_date(iso))
+            try:
+                result = svc.run_service_date(iso)
+            except DuplicateSolveError as exc:
+                logger.info("routing %s: skipped — %s", iso, exc)
+                continue
+            created, assigned, unassigned = _totals(result)
             summary["dates"].append(
                 {
                     "service_date": iso,

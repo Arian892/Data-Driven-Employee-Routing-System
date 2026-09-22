@@ -502,14 +502,14 @@ export const MyRequests: React.FC = () => {
                                   {/* One panel per leg — pickup and dropoff are separate
                                       vehicles/drivers/routes, so each gets its own map. */}
                                   {legs.map(leg => (
-                                    <div key={leg.route_id} className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                                      <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+                                    <div key={leg.route_id} className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+                                      <div className="lg:col-span-2 rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
                                         <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
                                           {leg.route_type === 'pickup' ? 'Pickup Route' : 'Dropoff Route'}
                                         </p>
                                         <ScheduleLegDetails leg={leg} />
                                       </div>
-                                      <div>
+                                      <div className="lg:col-span-3">
                                         <p className="text-xs text-slate-300 mb-2 uppercase tracking-wider">Route Map</p>
                                         <InteractiveMap
                                           center={[leg.stop.latitude, leg.stop.longitude]}
@@ -521,7 +521,7 @@ export const MyRequests: React.FC = () => {
                                           height="260px"
                                           lazy
                                         />
-                                        <MapLegend />
+                                        <MapLegend routeType={leg.route_type === 'dropoff' ? 'dropoff' : 'pickup'} />
                                       </div>
                                     </div>
                                   ))}

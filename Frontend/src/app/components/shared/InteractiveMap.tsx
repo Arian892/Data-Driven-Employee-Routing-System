@@ -19,8 +19,8 @@ interface MapPickerProps {
     color?: string;
     /** Text shown inside the pin, e.g. '1', '2', ... Defaults to the marker's 1-based index. */
     code?: string | number;
-    /** 'office' renders a distinct rounded badge; 'mine' renders a larger, highlighted pin. */
-    variant?: 'stop' | 'office' | 'mine';
+    /** 'office' renders a distinct rounded badge; 'mine' renders a larger, highlighted pin; 'start' is the vehicle's own starting position (an "S" pin, muted so it doesn't compete with numbered stops). */
+    variant?: 'stop' | 'office' | 'mine' | 'start';
   }>;
   showRoute?: boolean;
   /**
@@ -59,7 +59,7 @@ const BRIEFCASE_SVG = `
   </svg>
 `;
 
-const createColoredIcon = (color: string, code: string | number = '', variant: 'stop' | 'office' | 'mine' = 'stop') => {
+const createColoredIcon = (color: string, code: string | number = '', variant: 'stop' | 'office' | 'mine' | 'start' = 'stop') => {
   const isOffice = variant === 'office';
   const isMine = variant === 'mine';
   const size = isOffice ? 34 : isMine ? 36 : 30;
@@ -189,9 +189,16 @@ export const InteractiveMap: React.FC<MapPickerProps> = ({
 
     markers.forEach((md, idx) => {
       const variant = md.variant ?? 'stop';
-      const defaultColor = variant === 'office' ? '#10B981' : variant === 'mine' ? '#F59E0B' : '#475569';
+      const defaultColor = variant === 'office' ? '#10B981' : variant === 'mine' ? '#F59E0B' : variant === 'start' ? '#64748B' : '#475569';
       const marker = L.marker(md.position, {
         icon: createColoredIcon(md.color || defaultColor, md.code ?? idx + 1, variant),
+        // Leaflet's default stacking is purely by latitude — on a route whose
+        // stops span kilometres, the map zooms out far enough that a 'start'
+        // marker sitting near a stop is only a couple of screen pixels away
+        // from it, so whichever one Leaflet happens to draw on top hides the
+        // other completely. 'start' is deliberately rare (one per leg) and
+        // exactly the one riders need to be able to find, so it always wins.
+        zIndexOffset: variant === 'start' ? 1000 : 0,
       }).addTo(mapInstanceRef.current!);
 
       marker.bindPopup(`<div style="background:#ffffff;color:#0f172a;padding:8px 12px;border-radius:8px;font-size:12px;border:1px solid rgba(15,23,42,0.1)">

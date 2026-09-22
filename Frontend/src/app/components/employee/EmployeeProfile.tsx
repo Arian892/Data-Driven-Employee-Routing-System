@@ -469,15 +469,15 @@ export const EmployeeProfile: React.FC = () => {
                 return (
                   <>
                     {legs.map(leg => (
-                      <div key={leg.route_id} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                      <div key={leg.route_id} className="grid grid-cols-1 md:grid-cols-5 gap-6">
+                        <div className="md:col-span-2 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
                           <p className="text-xs text-slate-300 uppercase tracking-wider mb-2">
                             {leg.route_type === 'pickup' ? 'Pickup Route' : 'Dropoff Route'}
                           </p>
                           <ScheduleLegDetails leg={leg} />
                         </div>
 
-                        <div className="rounded-lg overflow-hidden border border-white/10" style={{ height: 280 }}>
+                        <div className="md:col-span-3 rounded-lg overflow-hidden border border-white/10" style={{ height: 280 }}>
                           <InteractiveMap
                             center={[leg.stop.latitude, leg.stop.longitude]}
                             zoom={14}

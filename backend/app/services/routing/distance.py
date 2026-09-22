@@ -18,13 +18,38 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Iterable, Protocol, Sequence
+import time
+from typing import Callable, Iterable, Protocol, Sequence
 
 import httpx
 
 from app.config import settings as app_settings
 
 logger = logging.getLogger("uvicorn.error")
+
+# A solve commits to one engine for its entire batch (150+ routes on a full
+# night), so a single unlucky probe — a backend that just restarted and hasn't
+# warmed up its connection, OSRM momentarily busy, a network blip — must not
+# be allowed to silently degrade the whole day to straight-line geometry.
+# Retrying a few times, with a short pause, absorbs exactly that kind of
+# transient without meaningfully slowing down the (already minutes-long) solve.
+_HEALTH_CHECK_ATTEMPTS = 3
+_HEALTH_CHECK_RETRY_DELAY_SECONDS = 1.5
+
+
+def _probe_with_retries(label: str, base_url: str, healthy: Callable[[], bool]) -> bool:
+    for attempt in range(1, _HEALTH_CHECK_ATTEMPTS + 1):
+        if healthy():
+            if attempt > 1:
+                logger.info("routing: %s at %s answered on attempt %d/%d", label, base_url, attempt, _HEALTH_CHECK_ATTEMPTS)
+            return True
+        if attempt < _HEALTH_CHECK_ATTEMPTS:
+            logger.warning(
+                "routing: %s at %s did not answer (attempt %d/%d), retrying in %.1fs",
+                label, base_url, attempt, _HEALTH_CHECK_ATTEMPTS, _HEALTH_CHECK_RETRY_DELAY_SECONDS,
+            )
+            time.sleep(_HEALTH_CHECK_RETRY_DELAY_SECONDS)
+    return False
 
 Coord = tuple[float, float]          # (lat, lng)
 Matrix = list[list[float]]
@@ -196,15 +221,15 @@ def get_foot_provider(prefer_osrm: bool | None = None) -> FootDistanceProvider:
         return HaversineWalkProvider()
 
     candidate = FootOsrmProvider()
-    if candidate.healthy():
+    if _probe_with_retries("OSRM foot", candidate.base_url, candidate.healthy):
         logger.info("routing: using OSRM foot at %s", candidate.base_url)
         return candidate
 
     candidate.close()
     logger.warning(
-        "routing: OSRM foot unreachable at %s, falling back to straight-line "
-        "walking times (Case A walk limits will be approximate)",
-        candidate.base_url,
+        "routing: OSRM foot unreachable at %s after %d attempts, falling back to "
+        "straight-line walking times (Case A walk limits will be approximate)",
+        candidate.base_url, _HEALTH_CHECK_ATTEMPTS,
     )
     return HaversineWalkProvider()
 
@@ -343,14 +368,14 @@ def get_provider(prefer_osrm: bool | None = None) -> DistanceProvider:
         return HaversineProvider()
 
     candidate = OsrmProvider()
-    if candidate.healthy():
+    if _probe_with_retries("OSRM", candidate.base_url, candidate.healthy):
         logger.info("routing: using OSRM at %s", candidate.base_url)
         return candidate
 
     candidate.close()
     logger.warning(
-        "routing: OSRM unreachable at %s, falling back to haversine "
+        "routing: OSRM unreachable at %s after %d attempts, falling back to haversine "
         "(distances and geometry will be approximate)",
-        candidate.base_url,
+        candidate.base_url, _HEALTH_CHECK_ATTEMPTS,
     )
     return HaversineProvider()
