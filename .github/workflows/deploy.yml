@@ -89,6 +89,29 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # The next step's tar extraction can overwrite a file's *contents* using
+      # only directory write permission, but chmod/utime on an existing file
+      # requires actually owning that file (or root) — directory permissions
+      # alone don't grant that. If /opt/dders/docker-compose.yml was ever
+      # created by root (e.g. an earlier `sudo scp`/`sudo mkdir` bootstrap),
+      # every later scp fails with:
+      #   "Cannot utime: Operation not permitted"
+      #   "Cannot change mode to rw-r--r--: Operation not permitted"
+      # even with scp-action's overwrite:true — that flag only stops tar from
+      # refusing an existing file, it can't bypass the file-owner check.
+      # Reasserting ownership before every copy makes this self-healing
+      # regardless of how the directory got into a bad state.
+      - name: Ensure remote directory is owned by the deploy user
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}
+          username: ${{ secrets.AZURE_VM_USER }}
+          key: ${{ secrets.AZURE_VM_SSH_KEY }}
+          script: |
+            set -e
+            sudo mkdir -p /opt/dders
+            sudo chown -R "$(whoami):$(whoami)" /opt/dders
+
       - name: Copy compose file to VM
         uses: appleboy/scp-action@v0.1.7
         with:

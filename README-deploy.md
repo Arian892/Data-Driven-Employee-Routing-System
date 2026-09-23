@@ -199,6 +199,35 @@ Then update `Frontend/nginx.conf` to add an `ssl` server block and rebuild/redep
 
 ---
 
+## Troubleshooting
+
+### `tar: docker-compose.yml: Cannot utime / Cannot change mode: Operation not permitted`
+
+Seen in the **Copy compose file to VM** step. Root cause: `/opt/dders/docker-compose.yml`
+(or the whole `/opt/dders` directory) is owned by a different user than `AZURE_VM_USER`
+— usually `root`, left over from an earlier manual `sudo scp` or `sudo mkdir` bootstrap.
+
+Why `overwrite: true` doesn't fix it: that flag only stops the remote tar from *refusing*
+an existing file. Overwriting a file's **contents** only needs directory write
+permission, but changing its **mode/mtime** (which tar always does after writing)
+requires actually owning the file, or being root — no directory permission grants that.
+
+**Fix already in the pipeline:** the `Ensure remote directory is owned by the deploy user`
+step runs `sudo chown -R $(whoami):$(whoami) /opt/dders` before every copy, so this
+self-heals on the next run automatically.
+
+**To unblock a run right now**, SSH in once and fix it manually:
+
+```bash
+ssh <AZURE_VM_USER>@<AZURE_VM_HOST>
+sudo chown -R "$(whoami):$(whoami)" /opt/dders
+ls -la /opt/dders   # confirm files are now owned by your user, not root
+```
+
+Then re-run the failed workflow from the GitHub Actions tab (or push again).
+
+---
+
 ## Useful commands on the VM
 
 ```bash
