@@ -97,6 +97,11 @@ jobs:
           key: ${{ secrets.AZURE_VM_SSH_KEY }}
           source: docker-compose.yml
           target: /opt/dders/
+          # Without this, the remote tar extraction refuses to replace a file
+          # that already exists at the target — and docker-compose.yml always
+          # already exists there from the previous deploy, so every run after
+          # the first would fail here deterministically.
+          overwrite: true
 
       - name: Deploy on Azure VM
         uses: appleboy/ssh-action@v1.2.0
