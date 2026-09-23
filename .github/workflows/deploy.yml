@@ -132,6 +132,11 @@ jobs:
           host: ${{ secrets.AZURE_VM_HOST }}
           username: ${{ secrets.AZURE_VM_USER }}
           key: ${{ secrets.AZURE_VM_SSH_KEY }}
+          # Overall wall-clock budget for the whole script below. Without this,
+          # a stalled `docker compose pull` (e.g. a network blip mid-transfer
+          # on a large OSRM layer) can hang the step — and the job — forever,
+          # silently burning Actions minutes instead of failing loudly.
+          command_timeout: 25m
           script: |
             set -e
             cd /opt/dders
@@ -140,7 +145,25 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | \
               docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            docker compose pull
+            # A stalled layer download can otherwise loop forever re-fetching
+            # the same bytes (seen with the OSRM image over a flaky link). Cap
+            # each attempt at 5 minutes and retry up to 3 times before giving
+            # up, so a transient blip self-recovers instead of hanging the job.
+            pull_ok=false
+            for attempt in 1 2 3; do
+              echo "docker compose pull — attempt $attempt/3"
+              if timeout 300 docker compose pull; then
+                pull_ok=true
+                break
+              fi
+              echo "Attempt $attempt timed out or failed; retrying in 10s..."
+              sleep 10
+            done
+            if [ "$pull_ok" != "true" ]; then
+              echo "::error::docker compose pull failed after 3 attempts"
+              exit 1
+            fi
+
             docker compose up -d --remove-orphans
             docker image prune -f
 
