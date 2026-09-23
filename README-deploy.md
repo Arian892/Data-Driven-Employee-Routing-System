@@ -227,19 +227,3 @@ ls -la /opt/dders   # confirm files are now owned by your user, not root
 Then re-run the failed workflow from the GitHub Actions tab (or push again).
 
 ---
-
-## Useful commands on the VM
-
-```bash
-# View live logs
-docker compose -f /opt/dders/docker-compose.yml logs -f
-
-# Restart a single service
-docker compose -f /opt/dders/docker-compose.yml restart backend
-
-# Tail backend logs only
-docker compose -f /opt/dders/docker-compose.yml logs -f backend
-
-# Check container health
-docker compose -f /opt/dders/docker-compose.yml ps
-```

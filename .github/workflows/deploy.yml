@@ -133,26 +133,37 @@ jobs:
           username: ${{ secrets.AZURE_VM_USER }}
           key: ${{ secrets.AZURE_VM_SSH_KEY }}
           # Overall wall-clock budget for the whole script below. Without this,
-          # a stalled `docker compose pull` (e.g. a network blip mid-transfer
-          # on a large OSRM layer) can hang the step — and the job — forever,
-          # silently burning Actions minutes instead of failing loudly.
-          command_timeout: 25m
+          # a stalled `docker compose pull` can hang the step — and the job —
+          # forever, silently burning Actions minutes instead of failing
+          # loudly. Must exceed the inner retry budget (2 x 15m) plus the
+          # `compose up` that follows, or it would cut a healthy pull short.
+          command_timeout: 40m
           script: |
             set -e
             cd /opt/dders
+
+            # Reclaim superseded layers on EVERY exit path, not just the happy
+            # one: with `set -e`, a failed pull skipped the prune entirely, so
+            # dangling images from half-finished deploys accumulated on the VM.
+            trap 'docker image prune -f || true' EXIT
 
             # Log in so Docker can pull the (potentially private) GHCR packages
             echo "${{ secrets.GITHUB_TOKEN }}" | \
               docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # A stalled layer download can otherwise loop forever re-fetching
-            # the same bytes (seen with the OSRM image over a flaky link). Cap
-            # each attempt at 5 minutes and retry up to 3 times before giving
-            # up, so a transient blip self-recovers instead of hanging the job.
+            # Bound the pull so a genuine stall fails loudly instead of hanging
+            # the job — but bound it GENEROUSLY. The backend image is ~2 GB, so
+            # a cold pull (any build where the dependency layer was rebuilt and
+            # got a new digest) legitimately needs many minutes. A cap that is
+            # too tight is actively harmful: `timeout` kills the pull mid-
+            # transfer, which has been observed to leave the VM's Docker daemon
+            # holding stale download state and then hanging on that same layer
+            # forever, until `systemctl restart docker` clears it. Prefer few,
+            # long attempts over many short ones.
             pull_ok=false
-            for attempt in 1 2 3; do
-              echo "docker compose pull — attempt $attempt/3"
-              if timeout 300 docker compose pull; then
+            for attempt in 1 2; do
+              echo "docker compose pull — attempt $attempt/2"
+              if timeout 900 docker compose pull; then
                 pull_ok=true
                 break
               fi
@@ -160,11 +171,11 @@ jobs:
               sleep 10
             done
             if [ "$pull_ok" != "true" ]; then
-              echo "::error::docker compose pull failed after 3 attempts"
+              echo "::error::docker compose pull failed after 2 attempts — if the"
+              echo "::error::VM's daemon is wedged, run: sudo systemctl restart docker"
               exit 1
             fi
 
             docker compose up -d --remove-orphans
-            docker image prune -f
 
             echo "✅ Deployed at $(date -u) — sha ${{ github.sha }}"
