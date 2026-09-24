@@ -211,6 +211,7 @@ class RoutingService:
         service_date: str,
         office_lat: Optional[float] = None,
         office_lng: Optional[float] = None,
+        force: bool = False,
     ) -> dict:
         """Route every request for one service date, pickups and drop-offs together.
 
@@ -219,8 +220,11 @@ class RoutingService:
         that already carried a `route_id`, which is unsafe here — a half-routed
         day would re-solve against a truncated request set and produce a fleet
         schedule contradicting the routes already stored.
+
+        `force` (see `_claim_solve_slot`) is only ever set by an explicit admin
+        re-run of a single day; the scheduler's own calls always leave it False.
         """
-        solved, ctx, summary, engine = self._solve(service_date, office_lat, office_lng, None)
+        solved, ctx, summary, engine = self._solve(service_date, office_lat, office_lng, None, force=force)
         return {
             "service_date": service_date,
             "engine": engine,

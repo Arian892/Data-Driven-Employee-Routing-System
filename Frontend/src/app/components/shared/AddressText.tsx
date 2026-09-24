@@ -20,7 +20,7 @@ export const AddressText: React.FC<{ lat?: number | null; lng?: number | null; c
   // takes effect — Tailwind's truncate (overflow/text-overflow/nowrap) is a
   // no-op on inline elements, so a long address would otherwise overflow its
   // row instead of ellipsizing, pushing sibling content out of view.
-  if (lat == null || lng == null) return <span className="block text-stone-500">No location set</span>;
-  if (!address) return <span className="block text-stone-500">Locating address…</span>;
-  return <span className={`block ${className ?? 'text-stone-700'}`}>{address}</span>;
+  if (lat == null || lng == null) return <span className="block text-muted-foreground">No location set</span>;
+  if (!address) return <span className="block text-muted-foreground">Locating address…</span>;
+  return <span className={`block ${className ?? 'text-foreground'}`}>{address}</span>;
 };

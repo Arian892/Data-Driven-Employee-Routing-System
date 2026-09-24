@@ -2,48 +2,52 @@
 
 :root {
   --font-size: 16px;
-  /* Editorial-minimal palette — mostly neutral (white canvas, near-black
-     type), with ONE muted, desaturated slate-blue as the deliberate accent,
-     used as flat solid blocks rather than gradients/glows. Restrained on
-     purpose: the previous vibrant-indigo pass read as "generic SaaS," and
-     the fix isn't a different vibrant color, it's less saturation overall. */
-  --background: #FAFAF9;
-  --foreground: #1C1917;
-  --card: #3F4B5E;
-  --card-foreground: #FFFFFF;
+  /* Ivory + Deep Navy + Teal — the light theme (default). Ivory is the
+     dominant page surface, white is reserved for cards, deep navy is
+     structural (sidebar, primary actions), and teal is the single accent
+     used for active states, links, and highlights. The `.dark` block below
+     is the same product's dark theme — a toggle just adds/removes the `dark`
+     class on <html>; every semantic `bg-card`/`text-foreground`/etc. class
+     switches automatically. */
+  --background: #F7F4EC;
+  --foreground: #172033;
+  --card: #FFFFFF;
+  --card-foreground: #172033;
   --popover: #FFFFFF;
-  --popover-foreground: #1C1917;
-  --primary: #475569;
-  --primary-foreground: #ffffff;
-  --secondary: #F5F5F4;
-  --secondary-foreground: #44403C;
-  --muted: #FAFAF9;
-  --muted-foreground: #78716C;
-  --accent: #F1F5F9;
-  --accent-foreground: #334155;
+  --popover-foreground: #172033;
+  --primary: #26364D;
+  --primary-foreground: #FFFFFF;
+  --secondary: #3D4E66;
+  --secondary-foreground: #FFFFFF;
+  --muted: #EFEAE0;
+  --muted-foreground: #718096;
+  --accent: #14B8A6;
+  --accent-foreground: #FFFFFF;
   --destructive: #DC2626;
-  --destructive-foreground: #ffffff;
-  --border: rgba(28, 25, 23, 0.08);
+  --destructive-foreground: #FFFFFF;
+  --border: #E2E5E8;
   --input: #FFFFFF;
   --input-background: #FFFFFF;
-  --switch-background: #D6D3D1;
+  --switch-background: #E2E5E8;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #475569;
-  --chart-1: #475569;
-  --chart-2: #10B981;
-  --chart-3: #D97706;
-  --chart-4: #8B5CF6;
+  --ring: #14B8A6;
+  --success: #16A34A;
+  --warning: #F59E0B;
+  --chart-1: #14B8A6;
+  --chart-2: #16A34A;
+  --chart-3: #F59E0B;
+  --chart-4: #26364D;
   --chart-5: #DC2626;
   --radius: 0.875rem;
-  --sidebar: #3F4B5E;
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: #ffffff;
-  --sidebar-primary-foreground: #3F4B5E;
+  --sidebar: #26364D;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #14B8A6;
+  --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: rgba(255, 255, 255, 0.08);
-  --sidebar-accent-foreground: #ffffff;
+  --sidebar-accent-foreground: #FFFFFF;
   --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #94A3B8;
+  --sidebar-ring: #14B8A6;
 }
 
 .dark {
@@ -53,32 +57,32 @@
   --card-foreground: #E8EDF5;
   --popover: #1A2235;
   --popover-foreground: #E8EDF5;
-  --primary: #0EA5E9;
-  --primary-foreground: #ffffff;
+  --primary: #14B8A6;
+  --primary-foreground: #0B0F1A;
   --secondary: #1E2A40;
-  --secondary-foreground: #94A3B8;
+  --secondary-foreground: #C3CEDC;
   --muted: #1A2235;
-  --muted-foreground: #64748B;
-  --accent: #F59E0B;
+  --muted-foreground: #8B96A8;
+  --accent: #14B8A6;
   --accent-foreground: #0B0F1A;
   --destructive: #EF4444;
-  --destructive-foreground: #ffffff;
+  --destructive-foreground: #FFFFFF;
   --border: rgba(255, 255, 255, 0.08);
-  --input: #1E2A40;
-  --ring: #0EA5E9;
-  --chart-1: #0EA5E9;
-  --chart-2: #10B981;
+  --input: #1A2235;
+  --ring: #14B8A6;
+  --chart-1: #14B8A6;
+  --chart-2: #22C55E;
   --chart-3: #F59E0B;
   --chart-4: #8B5CF6;
   --chart-5: #EF4444;
   --sidebar: #0D1320;
   --sidebar-foreground: #E8EDF5;
-  --sidebar-primary: #0EA5E9;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #1A2639;
+  --sidebar-primary: #14B8A6;
+  --sidebar-primary-foreground: #0B0F1A;
+  --sidebar-accent: rgba(255, 255, 255, 0.06);
   --sidebar-accent-foreground: #E8EDF5;
   --sidebar-border: rgba(255, 255, 255, 0.06);
-  --sidebar-ring: #0EA5E9;
+  --sidebar-ring: #14B8A6;
 }
 
 @theme inline {
@@ -98,6 +102,8 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-input-background: var(--input-background);
@@ -190,15 +196,16 @@
 
   input:focus-visible, select:focus-visible, textarea:focus-visible {
     outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.14);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.16);
   }
 
   button, a {
     transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
   }
 
-  /* Scrollbar styling */
+  /* Scrollbar styling — a dark thumb reads on the light theme's ivory page,
+     a light thumb reads on the dark theme's near-black page. */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -216,15 +223,27 @@
   ::-webkit-scrollbar-thumb:hover {
     background: rgba(28, 25, 23, 0.25);
   }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
 }
 
-/* Every card/panel in the app is built as `bg-card` + a thin border — on a
-   light theme that alone reads as flat, so give the surface itself a very
-   soft lift instead of hand-editing every card's className. Subtle enough
-   to read as "premium paper," not a drop-shadow effect. */
+/* Every card/panel in the app is built as `bg-card` + a thin border. On the
+   light theme that alone reads as flat, so a soft light-shadow lift reads as
+   "premium paper"; on the dark theme a deeper dark shadow reads as real
+   depth against the near-black page instead. */
 @layer components {
   .bg-card {
     box-shadow: 0 1px 2px rgba(28, 25, 23, 0.03), 0 2px 8px -2px rgba(28, 25, 23, 0.04);
     transition: box-shadow 200ms ease;
+  }
+
+  .dark .bg-card {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px -4px rgba(0, 0, 0, 0.4);
   }
 }

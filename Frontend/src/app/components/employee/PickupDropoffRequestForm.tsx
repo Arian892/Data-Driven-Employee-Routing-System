@@ -381,7 +381,7 @@ export const PickupDropoffRequestForm: React.FC = () => {
     return (
       <Sidebar role="employee">
         <div className="p-8 flex items-center justify-center min-h-[50vh]">
-          <div className="w-8 h-8 border-2 border-sky-500/30 border-t-sky-400 rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-[#14B8A6]/30 border-t-[#14B8A6] rounded-full animate-spin" />
         </div>
       </Sidebar>
     );
@@ -391,16 +391,16 @@ export const PickupDropoffRequestForm: React.FC = () => {
     return (
       <Sidebar role="employee">
         <div className="p-8 max-w-2xl mx-auto">
-          <h1 className="text-2xl font-bold text-stone-900 mb-2" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+          <h1 className="text-2xl font-bold text-foreground mb-2" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
             Pickup & Dropoff Request
           </h1>
-          <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/8 px-5 py-4">
-            <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+          <div className="flex items-start gap-3 rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/8 px-5 py-4">
+            <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
             <div>
-              <p className="text-sm text-red-700">{error ?? 'Could not load the request window.'}</p>
+              <p className="text-sm text-red-600 dark:text-red-400">{error ?? 'Could not load the request window.'}</p>
               <button
                 onClick={() => window.location.reload()}
-                className="mt-3 text-xs text-sky-600 hover:text-sky-700 font-medium"
+                className="mt-3 text-xs text-sky-600 dark:text-sky-400 hover:text-sky-500 dark:hover:text-sky-300 font-medium"
               >
                 Retry
               </button>
@@ -419,21 +419,21 @@ export const PickupDropoffRequestForm: React.FC = () => {
         <div className="p-8 max-w-2xl mx-auto flex flex-col items-center justify-center min-h-[70vh]">
           <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/8 p-10 text-center max-w-md">
             <div className="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center mx-auto mb-5">
-              <CheckCircle className="w-8 h-8 text-emerald-600" />
+              <CheckCircle className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <h2 className="text-2xl font-bold text-stone-900 mb-3" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+            <h2 className="text-2xl font-bold text-foreground mb-3" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
               Request Saved{editMode ? ' — Updated' : ''}!
             </h2>
-            <p className="text-stone-600 text-sm leading-relaxed mb-2">
+            <p className="text-foreground text-sm leading-relaxed mb-2">
               Your pickup &amp; dropoff request for{' '}
-              <span className="text-stone-900 font-medium">{dayNames.join(', ')}</span> has been submitted.
+              <span className="text-foreground font-medium">{dayNames.join(', ')}</span> has been submitted.
             </p>
-            <p className="text-xs text-stone-500 mb-6">
+            <p className="text-xs text-muted-foreground mb-6">
               Only one request counts per week — editing it before the deadline replaces it.
             </p>
             <button
               onClick={backToForm}
-              className="px-6 py-2.5 rounded-lg bg-slate-600 hover:bg-slate-500 text-white text-sm font-semibold transition"
+              className="px-6 py-2.5 rounded-lg bg-primary hover:opacity-90 text-primary-foreground text-sm font-semibold transition"
             >
               View My Request
             </button>
@@ -454,18 +454,18 @@ export const PickupDropoffRequestForm: React.FC = () => {
     <Sidebar role="employee">
       <div className="p-6 max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-stone-900 mb-1" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+          <h1 className="text-3xl font-bold text-foreground mb-1" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
             Pickup & Dropoff Request
           </h1>
-          <p className="text-stone-500 text-sm">
+          <p className="text-muted-foreground text-sm">
             Weekly request for next week{' '}
-            <span className="text-stone-700">
+            <span className="text-foreground">
               {labelFor(weekly, 'sun').short}, {labelFor(weekly, 'sun').label} →{' '}
               {labelFor(weekly, 'sat').short}, {labelFor(weekly, 'sat').label}
             </span>{' '}
             — select the days you'll come to the office.
           </p>
-          <p className="text-xs text-stone-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             {activeCount} of {MAX_DAYS} days selected. Pickup &amp; dropoff default to your home address — adjust them
             on the map if needed.
           </p>
@@ -474,41 +474,41 @@ export const PickupDropoffRequestForm: React.FC = () => {
         {/* Window banner */}
         {windowOpen ? (
           <div className="flex items-start gap-3 rounded-xl border border-sky-500/15 bg-sky-500/8 px-5 py-4 mb-6">
-            <Info className="w-4 h-4 text-sky-600 mt-0.5 flex-shrink-0" />
-            <div className="text-xs text-sky-700/80">
+            <Info className="w-4 h-4 text-sky-600 dark:text-sky-400 mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-sky-600/80 dark:text-sky-400/80">
               <p>
-                <span className="font-semibold text-sky-700">Request window is open.</span> Submit by{' '}
-                <span className="font-semibold text-sky-700">Saturday 11:59 PM</span>. Time left:{' '}
-                <span className="font-mono text-sky-700">{fmtCountdown(countdownMs)}</span>
+                <span className="font-semibold text-sky-600 dark:text-sky-400">Request window is open.</span> Submit by{' '}
+                <span className="font-semibold text-sky-600 dark:text-sky-400">Saturday 11:59 PM</span>. Time left:{' '}
+                <span className="font-mono text-sky-600 dark:text-sky-400">{fmtCountdown(countdownMs)}</span>
               </p>
               {editMode && (
-                <p className="mt-1 text-amber-700/80 flex items-center gap-1.5">
+                <p className="mt-1 text-amber-600/80 dark:text-amber-400/80 flex items-center gap-1.5">
                   <Pencil className="w-3 h-3" /> You already have a request for this week — any change replaces it.
                 </p>
               )}
             </div>
           </div>
         ) : (
-          <div className="flex items-start gap-3 rounded-xl border border-stone-600/20 bg-stone-800/40 px-5 py-4 mb-6">
-            <Lock className="w-4 h-4 text-stone-500 mt-0.5 flex-shrink-0" />
-            <div className="text-xs text-stone-600">
+          <div className="flex items-start gap-3 rounded-xl border border-border bg-muted px-5 py-4 mb-6">
+            <Lock className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-foreground">
               <p>
-                <span className="font-semibold text-stone-700">Requests are closed.</span> New requests are only accepted
+                <span className="font-semibold text-foreground">Requests are closed.</span> New requests are only accepted
                 on Friday &amp; Saturday, until Saturday 11:59 PM.
               </p>
               <p className="mt-1">
                 Next window opens in{' '}
-                <span className="font-mono text-stone-900">{fmtCountdown(countdownMs)}</span>
-                {editMode && <span className="text-amber-700/80"> — your saved request is shown below.</span>}
+                <span className="font-mono text-foreground">{fmtCountdown(countdownMs)}</span>
+                {editMode && <span className="text-amber-600/80 dark:text-amber-400/80"> — your saved request is shown below.</span>}
               </p>
             </div>
           </div>
         )}
 
         {error && (
-          <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/8 px-5 py-4 mb-6">
-            <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-red-700/90">{error}</p>
+          <div className="flex items-start gap-3 rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/8 px-5 py-4 mb-6">
+            <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-red-600 dark:text-red-400/90">{error}</p>
           </div>
         )}
 
@@ -525,17 +525,17 @@ export const PickupDropoffRequestForm: React.FC = () => {
                   className={`rounded-xl border px-3 py-3 text-left transition-all ${
                     enabled[key]
                       ? 'bg-sky-500/15 border-sky-500/40'
-                      : 'border-stone-200 bg-stone-50 hover:border-stone-200'
+                      : 'border-border bg-muted hover:border-foreground/20'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <p className={`text-sm font-bold ${enabled[key] ? 'text-sky-700' : 'text-stone-500'}`}>
+                      <p className={`text-sm font-bold ${enabled[key] ? 'text-sky-600 dark:text-sky-400' : 'text-muted-foreground'}`}>
                         {label.short}
                       </p>
-                      <p className="text-xs mt-0.5 text-stone-500">{label.label}</p>
+                      <p className="text-xs mt-0.5 text-muted-foreground">{label.label}</p>
                     </div>
-                    <div className={`w-4 h-4 rounded border flex-shrink-0 ${enabled[key] ? 'bg-sky-400 border-sky-300' : 'border-stone-200'}`} />
+                    <div className={`w-4 h-4 rounded border flex-shrink-0 ${enabled[key] ? 'bg-sky-400 border-sky-300' : 'border-border'}`} />
                   </div>
                 </button>
               );
@@ -548,41 +548,41 @@ export const PickupDropoffRequestForm: React.FC = () => {
                 const b = bookings[key];
                 const label = labelFor(weekly, key);
                 return (
-                  <div key={key} className="rounded-xl border border-white/10 bg-card p-6">
+                  <div key={key} className="rounded-xl border border-border bg-card p-6">
                     <h3
-                      className="text-base font-semibold text-white mb-5 flex items-center gap-2"
+                      className="text-base font-semibold text-foreground mb-5 flex items-center gap-2"
                       style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
                     >
-                      <CalendarDays className="w-4 h-4 text-sky-400" />
+                      <CalendarDays className="w-4 h-4 text-sky-600 dark:text-sky-400" />
                       {label.full}, {label.label} — Shift Times
                     </h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
                       <div>
-                        <label className="block text-xs text-slate-300 mb-2 uppercase tracking-wider">
+                        <label className="block text-xs text-muted-foreground mb-2 uppercase tracking-wider">
                           Shift Start Time
                         </label>
                         <div className="relative">
-                          <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                           <select
                             value={b.shiftStart}
                             onChange={e => updateBooking(key, { shiftStart: e.target.value })}
-                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-sky-500/40 transition"
+                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-border bg-muted text-foreground text-sm focus:outline-none focus:border-sky-500/40 transition"
                           >
                             {SHIFT_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                           </select>
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs text-slate-300 mb-2 uppercase tracking-wider">
+                        <label className="block text-xs text-muted-foreground mb-2 uppercase tracking-wider">
                           Shift End Time
                         </label>
                         <div className="relative">
-                          <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                           <select
                             value={b.shiftEnd}
                             onChange={e => updateBooking(key, { shiftEnd: e.target.value })}
-                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-sky-500/40 transition"
+                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-border bg-muted text-foreground text-sm focus:outline-none focus:border-sky-500/40 transition"
                           >
                             {SHIFT_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                           </select>
@@ -591,7 +591,7 @@ export const PickupDropoffRequestForm: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                      <div className="rounded-xl border border-sky-500/15 bg-white/5 p-5">
+                      <div className="rounded-xl border border-sky-500/15 bg-muted p-5">
                         <MapLocationPicker
                           title="Pickup Location"
                           description="Where the bus picks you up on the way to the office."
@@ -601,7 +601,7 @@ export const PickupDropoffRequestForm: React.FC = () => {
                           origin={OFFICE_MARKER}
                         />
                       </div>
-                      <div className="rounded-xl border border-emerald-500/15 bg-white/5 p-5">
+                      <div className="rounded-xl border border-emerald-500/15 bg-muted p-5">
                         <MapLocationPicker
                           title="Dropoff Location"
                           description="Where the bus drops you off after your shift."
@@ -623,7 +623,7 @@ export const PickupDropoffRequestForm: React.FC = () => {
               type="button"
               onClick={handleSubmit}
               disabled={isSubmitting || !windowOpen}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-600 hover:bg-slate-500 text-white font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary hover:opacity-90 text-primary-foreground font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
                 <>

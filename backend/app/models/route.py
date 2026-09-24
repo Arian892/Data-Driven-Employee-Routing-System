@@ -78,6 +78,19 @@ class DropoffRoutingRunPayload(BaseModel):
     force: bool = False
 
 
+class RunDayRoutingPayload(BaseModel):
+    """Force re-route one service date (pickup + dropoff together) on demand.
+
+    Deletes and rewrites that date's routes from scratch — the same idempotent
+    replacement `run_service_date` always does — but always bypasses the
+    "just solved this recently" dedup guard, since a deliberate per-day admin
+    click is exactly the case that guard is meant to let through.
+    """
+
+    service_date: str
+    force: bool = True
+
+
 class UnassignedEntry(BaseModel):
     """One request the solver could not place, and why.
 

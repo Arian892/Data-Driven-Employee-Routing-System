@@ -31,6 +31,31 @@ class RequestService:
     def __init__(self, db: Client):
         self.db = db
 
+    def _fetch_all(self, table: str, select: str, eq_filters: dict) -> list[dict]:
+        """Fetch every row matching `eq_filters`, looping past PostgREST's
+        default ~1000-row response cap via `.range()`.
+
+        A single `.execute()` silently truncates there — `get_all_pickups`
+        and `get_all_dropoffs` used to do exactly that, which made anything
+        computed from their result (an admin "Approved" total, or a single
+        date's request count once it grew past 1000 rows) quietly wrong with
+        no error raised anywhere.
+        """
+        page_size = 1000
+        start = 0
+        all_rows: list[dict] = []
+        while True:
+            query = self.db.table(table).select(select)
+            for col, val in eq_filters.items():
+                query = query.eq(col, val)
+            res = query.order("created_at", desc=True).range(start, start + page_size - 1).execute()
+            rows = res.data or []
+            all_rows.extend(rows)
+            if len(rows) < page_size:
+                break
+            start += page_size
+        return all_rows
+
     # ── Pickup Requests ─────────────────────────────────────────
 
     def create_pickup(self, user_id: int, data: PickupRequestCreate):
@@ -72,21 +97,17 @@ class RequestService:
         return [self._flatten_pickup(r) for r in res.data]
 
     def get_all_pickups(self, status: str = None, service_date: str = None):
-        query = (
-            self.db.table("pickup_request")
-            .select(
-                "*, "
-                "employee(employee_id, users(name)), "
-                "zone(zone_name)"
-            )
-        )
+        filters = {}
         if status:
-            query = query.eq("status", status)
+            filters["status"] = status
         if service_date:
-            query = query.eq("service_date", service_date)
-
-        res = query.order("created_at", desc=True).execute()
-        return [self._flatten_pickup(r) for r in res.data]
+            filters["service_date"] = service_date
+        rows = self._fetch_all(
+            "pickup_request",
+            "*, employee(employee_id, users(name)), zone(zone_name)",
+            filters,
+        )
+        return [self._flatten_pickup(r) for r in rows]
 
     def update_my_pickup(self, pickup_id: int, user_id: int, data: PickupRequestUpdate):
         employee_id = self._get_employee_id_for_user(user_id)
@@ -239,21 +260,17 @@ class RequestService:
         return {"message": "Dropoff request cancelled"}
 
     def get_all_dropoffs(self, status: str = None, service_date: str = None):
-        query = (
-            self.db.table("dropoff_request")
-            .select(
-                "*, "
-                "employee(employee_id, users(name)), "
-                "zone(zone_name)"
-            )
-        )
+        filters = {}
         if status:
-            query = query.eq("status", status)
+            filters["status"] = status
         if service_date:
-            query = query.eq("service_date", service_date)
-
-        res = query.order("created_at", desc=True).execute()
-        return [self._flatten_dropoff(r) for r in res.data]
+            filters["service_date"] = service_date
+        rows = self._fetch_all(
+            "dropoff_request",
+            "*, employee(employee_id, users(name)), zone(zone_name)",
+            filters,
+        )
+        return [self._flatten_dropoff(r) for r in rows]
 
     def get_dropoff_by_id(self, dropoff_id: int):
         res = (

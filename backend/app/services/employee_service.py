@@ -9,12 +9,21 @@ class EmployeeService:
         self.db = db
 
     def get_all(self) -> list[dict]:
-        res = (
-            self.db.table("employee")
-            .select("employee_id, user_id, home_lat, home_lng, is_active, users(name, email, phone, role, status)")
-            .execute()
-        )
-        return [self._flatten_employee(row) for row in res.data]
+        # Looped via `.range()` rather than a single `.execute()` — PostgREST
+        # silently truncates an unbounded select at ~1000 rows, and the
+        # employee table (940+ rows, growing) is already close to that.
+        select = "employee_id, user_id, home_lat, home_lng, is_active, users(name, email, phone, role, status)"
+        page_size = 1000
+        start = 0
+        rows: list[dict] = []
+        while True:
+            res = self.db.table("employee").select(select).range(start, start + page_size - 1).execute()
+            batch = res.data or []
+            rows.extend(batch)
+            if len(batch) < page_size:
+                break
+            start += page_size
+        return [self._flatten_employee(row) for row in rows]
 
     def _get_employee_or_404(self, user_id: int) -> dict:
         res = (

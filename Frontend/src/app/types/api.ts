@@ -435,17 +435,13 @@ export interface RoutingRunResponse {
   message?: string | null;
 }
 
-export interface RunAllRoutingDate {
+export interface RunDayRoutingResponse {
   service_date: string;
-  routes_created: number;
-  employees_assigned: number;
-  unassigned: number;
-}
-
-export interface RunAllRoutingResponse {
-  ran: boolean;
-  reason?: string;
-  dates: RunAllRoutingDate[];
+  engine: string;
+  counts: Record<string, number>;
+  db_calls?: number;
+  pickup: RoutingRunResponse;
+  dropoff: RoutingRunResponse;
 }
 
 export interface RouteAssignmentResponse {

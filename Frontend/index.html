@@ -9,7 +9,15 @@
       <meta name="description" content="Streamline transport operations with a user-friendly route management system for employees and drivers, enhancing efficiency and communication." />
       <meta name="robots" content="noindex, nofollow" />
       <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
-      
+      <script>
+        // Applied before React hydrates, so the page never flashes the wrong
+        // theme on load — matches the read in ThemeContext.tsx exactly.
+        try {
+          var saved = localStorage.getItem('transpo-theme');
+          if (saved === 'dark') document.documentElement.classList.add('dark');
+        } catch (e) {}
+      </script>
+
     </head>
 
     <body>

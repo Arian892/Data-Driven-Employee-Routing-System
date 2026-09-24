@@ -26,7 +26,7 @@ import type {
   RouteAssignmentResponse,
   RouteDetailResponse,
   RoutingRunResponse,
-  RunAllRoutingResponse,
+  RunDayRoutingResponse,
   ScheduleResponse,
   ScheduleSummaryResponse,
   Vehicle,
@@ -490,10 +490,11 @@ export const adminApi = {
     });
   },
 
-  /** Route every pending request (any date, any shift) in one call. */
-  runAllRouting(): Promise<RunAllRoutingResponse> {
-    return request<RunAllRoutingResponse>("/admin/routing/run-all", {
+  /** Force re-route a single service date (pickup + dropoff together), bypassing the recent-solve dedup guard. */
+  runDayRouting(serviceDate: string): Promise<RunDayRoutingResponse> {
+    return request<RunDayRoutingResponse>("/admin/routing/run-day", {
       method: "POST",
+      body: JSON.stringify({ service_date: serviceDate, force: true }),
     });
   },
 

@@ -2,9 +2,11 @@ import React, { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import {
   MapPinned, ClipboardList, User, LogOut, Map,
-  Menu, X, Zap, Bus,
+  Menu, X, Zap, Bus, Sun, Moon,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
+import { RouteMapBackdrop } from './RouteMapBackdrop';
 
 interface SidebarProps {
   role: 'employee' | 'driver';
@@ -30,14 +32,16 @@ const driverNavItems: NavItem[] = [
   { icon: User, label: 'My Profile', path: '/driver/profile' },
 ];
 
-// One muted, desaturated slate-blue — flat, no gradient. The editorial
-// reference this follows uses solid color blocks, not shiny SaaS gradients.
-const SIDEBAR_COLOR = '#3F4B5E';
+// The --sidebar token: Deep Navy (#26364D) in the light theme, near-black
+// navy (#0D1320) in the dark theme — the rail is always dark either way, so
+// the white/translucent text and icons below work unchanged in both.
+const SIDEBAR_COLOR = 'var(--sidebar)';
 
 export const Sidebar: React.FC<SidebarProps> = ({ role, children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
   const navItems = role === 'employee' ? employeeNavItems : driverNavItems;
@@ -79,14 +83,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, children }) => {
               <div
                 className={`flex items-center gap-3 px-3.5 py-3 rounded-lg transition-all duration-150 ${
                   active
-                    ? 'bg-white text-slate-800'
-                    : 'text-slate-300 hover:text-white hover:bg-white/[0.08]'
+                    ? 'bg-[#14B8A6]/15 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
                 }`}
               >
-                <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-slate-600' : 'text-slate-400'}`} />
-                <span className={`text-sm font-medium flex-1 ${active ? 'text-slate-800' : ''}`}>{item.label}</span>
+                <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-[#14B8A6]' : 'text-slate-500'}`} />
+                <span className="text-sm font-medium flex-1">{item.label}</span>
                 {item.badge && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${active ? 'bg-amber-100 text-amber-700' : 'bg-amber-400/20 text-amber-200'}`}>
+                  <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${active ? 'bg-[#14B8A6]/20 text-[#14B8A6]' : 'bg-amber-400/20 text-amber-200'}`}>
                     {item.badge}
                   </span>
                 )}
@@ -108,6 +112,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, children }) => {
           </div>
         </div>
         <button
+          onClick={toggleTheme}
+          className="w-full flex items-center gap-3 px-3 py-2.5 mt-1 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-white/[0.08] transition"
+        >
+          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          <span className="font-medium">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+        </button>
+        <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 mt-1 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-white/[0.08] transition"
         >
@@ -122,7 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, children }) => {
     <div className="flex h-screen bg-background">
       {/* Desktop Sidebar — flat, no gradient/glow, matching the reference's
           solid color-block language. */}
-      <aside className="hidden md:flex md:flex-col w-64 flex-shrink-0" style={{ background: SIDEBAR_COLOR }}>
+      <aside className="hidden md:flex md:flex-col w-52 flex-shrink-0" style={{ background: SIDEBAR_COLOR }}>
         <SidebarContent />
       </aside>
 
@@ -155,9 +166,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, children }) => {
         </>
       )}
 
-      {/* Content */}
-      <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
-        {children}
+      {/* Content — a faint version of the same route-map motif sits behind
+          the page (fixed in place while the page scrolls, since it's
+          absolutely positioned against this scroll container itself). */}
+      <main className="flex-1 overflow-y-auto pt-14 md:pt-0 relative">
+        <RouteMapBackdrop variant="content" />
+        <div className="relative z-10">
+          {children}
+        </div>
       </main>
     </div>
   );

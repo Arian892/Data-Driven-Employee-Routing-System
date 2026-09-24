@@ -113,15 +113,15 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     <div>
       <div className="flex items-center gap-2 mb-1">
         <MapPin className="w-4 h-4" style={{ color: accentHex }} />
-        <h3 className="text-sm font-semibold text-white" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+        <h3 className="text-sm font-semibold text-foreground" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
           {title}
         </h3>
       </div>
-      <p className="text-xs text-slate-300 mb-4">{description}</p>
+      <p className="text-xs text-muted-foreground mb-4">{description}</p>
 
       {/* Search box */}
       <div className="relative mb-3">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input
           type="text"
           value={query}
@@ -143,23 +143,23 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
             }
           }}
           placeholder="Search your location (e.g. Banani, Dhaka)…"
-          className="w-full pl-9 pr-9 py-3 rounded-lg border border-white/10 bg-white/5 text-white placeholder:text-slate-500 text-sm focus:outline-none focus:border-sky-400/40 transition"
+          className="w-full pl-9 pr-9 py-3 rounded-lg border border-border bg-muted text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:border-sky-600/40 dark:focus:border-sky-400/40 transition"
         />
         {searching && (
-          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-slate-400" />
+          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
         )}
 
         {suggestions.length > 0 && (
-          <div className="absolute z-20 mt-1 w-full rounded-lg border border-white/10 bg-[#3F4B5E] shadow-xl overflow-hidden">
+          <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-card shadow-xl overflow-hidden">
             {suggestions.map((s, i) => (
               <button
                 key={i}
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pickSuggestion(s)}
-                className="w-full text-left px-4 py-2.5 text-xs text-slate-200 hover:bg-white/10 transition flex items-start gap-2 border-b border-white/10 last:border-0"
+                className="w-full text-left px-4 py-2.5 text-xs text-foreground hover:bg-muted transition flex items-start gap-2 border-b border-border last:border-0"
               >
-                <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0 text-slate-400" />
+                <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0 text-muted-foreground" />
                 <span className="line-clamp-2">{s.name}</span>
               </button>
             ))}
@@ -184,7 +184,7 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
       />
 
       {value.pinned && (
-        <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1.5">
+        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-1.5">
           <CheckCircle className="w-3 h-3" /> {title} pinned on map
         </p>
       )}

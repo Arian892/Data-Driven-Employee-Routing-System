@@ -213,15 +213,15 @@ export const ScheduleLegDetails: React.FC<{ leg: ScheduleLeg }> = ({ leg }) => {
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         {isPickup
-          ? <ArrowUpRight className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-          : <ArrowDownLeft className="w-4 h-4 text-violet-400 flex-shrink-0" />}
-        <p className="text-sm text-slate-200">
+          ? <ArrowUpRight className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+          : <ArrowDownLeft className="w-4 h-4 text-violet-600 dark:text-violet-400 flex-shrink-0" />}
+        <p className="text-sm text-foreground">
           {isPickup ? 'Ride to office' : 'Ride home'} · stop {leg.stop.sequence_order}
           {leg.shift_time ? ` · shift ${leg.shift_time.slice(0, 5)}` : ''}
         </p>
       </div>
       <div className="flex items-center gap-2">
-        <MapPin className="w-4 h-4 text-sky-400 flex-shrink-0" />
+        <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: '#14B8A6' }} />
         <div className="text-sm">
           {/* A named stop is the solver's own label — for a shared main-road drop
               ("Agargaon Metro Station") that is the difference between the
@@ -230,38 +230,38 @@ export const ScheduleLegDetails: React.FC<{ leg: ScheduleLeg }> = ({ leg }) => {
               "Ad-hoc (Md. Shamiul Alam)" / "Home (Md. Shamiul Alam)" — so for
               those, show the actual address instead of that internal label. */}
           {leg.stop.stop_name && !isSyntheticStopName(leg.stop.stop_name, leg.stop.is_adhoc) ? (
-            <p className="text-white">{leg.stop.stop_name}</p>
+            <p className="text-foreground">{leg.stop.stop_name}</p>
           ) : (
-            <AddressText lat={leg.stop.latitude} lng={leg.stop.longitude} className="text-white" />
+            <AddressText lat={leg.stop.latitude} lng={leg.stop.longitude} className="text-foreground" />
           )}
           {leg.stop.is_shared && (
-            <p className="text-xs text-violet-300 mt-0.5">
+            <p className="text-xs text-violet-600 dark:text-violet-300 mt-0.5">
               Shared drop point — walk from here to your home.
             </p>
           )}
-          <p className="text-xs text-slate-400 font-mono">{coordinateLabel(leg.stop.latitude, leg.stop.longitude)}</p>
+          <p className="text-xs font-mono text-muted-foreground">{coordinateLabel(leg.stop.latitude, leg.stop.longitude)}</p>
         </div>
       </div>
       {leg.stop.arrival_time && (
         <div className="flex items-center gap-2">
-          <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />
-          <p className="text-sm text-slate-200">
+          <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+          <p className="text-sm text-foreground">
             {isPickup ? 'Pickup at' : 'Dropoff at'}: {leg.stop.arrival_time}
           </p>
         </div>
       )}
       {leg.driver && (
         <div className="flex items-center gap-2">
-          <UserIcon className="w-4 h-4 text-sky-400 flex-shrink-0" />
-          <p className="text-sm text-slate-200">
+          <UserIcon className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
+          <p className="text-sm text-foreground">
             Driver: {leg.driver.name}{leg.driver.phone ? ` · ${leg.driver.phone}` : ''}
           </p>
         </div>
       )}
       {leg.vehicle && (
         <div className="flex items-center gap-2">
-          <Car className="w-4 h-4 text-sky-400 flex-shrink-0" />
-          <p className="text-sm text-slate-200">Vehicle: {leg.vehicle.plate_no ?? '—'}</p>
+          <Car className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
+          <p className="text-sm text-foreground">Vehicle: {leg.vehicle.plate_no ?? '—'}</p>
         </div>
       )}
     </div>

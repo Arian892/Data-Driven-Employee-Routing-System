@@ -16,13 +16,14 @@ from app.models.route import (
     RouteAssignmentResponse,
     RouteDetailResponse,
     RoutingRunResponse,
+    RunDayRoutingPayload,
     ScheduleSummaryResponse,
     ZoneCreate,
     ZoneResponse,
     ZoneUpdate,
     ZonesListResponse,
 )
-from app.scheduler import run_all_pending, run_pending_routing
+from app.scheduler import run_pending_routing
 from app.services.employee_service import EmployeeService
 from app.services.route_service import RouteService
 from app.services.routing_service import DuplicateSolveError, RoutingService
@@ -93,16 +94,22 @@ def auto_run_routing(
     return run_pending_routing(force=True)
 
 
-@router.post("/admin/routing/run-all")
-def run_all_routing(
+@router.post("/admin/routing/run-day")
+def run_day_routing(
+    payload: RunDayRoutingPayload,
     _: TokenData = Depends(require_admin),
+    svc: RoutingService = Depends(_routing_svc),
 ):
-    """Route every pending request (any date, any shift) in a single call.
+    """Force re-route one service date (pickup + dropoff together) on demand.
 
-    Picks up anything left over after manual edits/rejections, regardless of
-    which service date it belongs to. Safe to call repeatedly (idempotent).
+    Deletes and rewrites that date's routes from scratch, bypassing the
+    "just solved this recently" dedup guard by default — the scheduler never
+    calls this, so a fresh admin click for that date should always go through.
     """
-    return run_all_pending(force=True)
+    try:
+        return svc.run_service_date(payload.service_date, force=payload.force)
+    except DuplicateSolveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @router.post("/admin/employees", response_model=EmployeeProfileResponse, status_code=201)
